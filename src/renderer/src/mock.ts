@@ -137,6 +137,8 @@ export function installMock(): void {
 
   const api: CytvApi = {
     platform: 'darwin',
+    installMuzcast: async () => { await wait(1000); return { version: 'Démonstration' } },
+    openMuzcast: async () => {},
     async scan() {
       await wait(1200)
       return [{ host: '192.168.1.50' }, { host: '192.168.1.73' }]

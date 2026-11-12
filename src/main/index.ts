@@ -9,6 +9,7 @@ import * as debloat from './debloat'
 import * as launcher from './launcher'
 import * as system from './system'
 import * as sideload from './sideload'
+import * as muzcast from './muzcast'
 import * as tools from './toolchain'
 import { discover, stopDiscovery } from './discover'
 import { localSubnets, scan } from './scan'
@@ -81,6 +82,8 @@ async function checks(): Promise<CheckItem[]> {
 type Handlers = { [K in keyof CytvApi as CytvApi[K] extends (...a: never[]) => Promise<unknown> ? K : never]: CytvApi[K] }
 
 const handlers: Omit<Handlers, 'onLog' | 'onProgress' | 'onStatus'> = {
+  installMuzcast: (product) => muzcast.install(product),
+  openMuzcast: (product) => muzcast.open(product),
   scan: () => scan(),
   discover: () => discover(),
   stopDiscovery: async () => stopDiscovery(),
@@ -207,7 +210,7 @@ function createWindow(): void {
     height: 820,
     minWidth: 960,
     minHeight: 640,
-    title: 'CleanMyTV',
+    title: 'Muzcast · À la maison',
     backgroundColor: '#FFFFFF',
     show: false,
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: true, contextIsolation: true, nodeIntegration: false, webviewTag: false }

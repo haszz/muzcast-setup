@@ -413,6 +413,8 @@ export interface WebResponse {
 }
 
 export interface CytvApi {
+  installMuzcast(product: 'launcher' | 'muzcast'): Promise<{ version: string }>
+  openMuzcast(product: 'launcher' | 'muzcast'): Promise<void>
   platform: 'darwin' | 'win32' | 'linux'
 
   // Connection

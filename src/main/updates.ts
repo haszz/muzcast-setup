@@ -2,8 +2,8 @@
 // with the answer cached in the settings file. Nothing is downloaded: the app links to the release page.
 import type { UpdateInfo } from '@shared/api'
 
-const URL_LATEST = 'https://api.github.com/repos/wingedpanther/cleanmytv/releases/latest'
-const RELEASES = 'https://github.com/wingedpanther/cleanmytv/releases/'
+const URL_LATEST = 'https://api.github.com/repos/haszz/muzcast-setup/releases/latest'
+const RELEASES = 'https://github.com/haszz/muzcast-setup/releases/'
 const EVERY_MS = 12 * 60 * 60 * 1000
 
 export interface UpdateCache {

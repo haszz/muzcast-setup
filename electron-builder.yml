@@ -1,5 +1,5 @@
-appId: io.github.wingedpanther.cleanmytv
-productName: CleanMyTV
+appId: co.muzcast.setup
+productName: Muzcast à la maison
 directories:
   output: dist
   buildResources: build
@@ -9,12 +9,6 @@ files:
 extraResources:
   - from: resources/upstream
     to: upstream
-  - from: resources/home.apk
-    to: home.apk
-  - from: resources/home.json
-    to: home.json
-  - from: resources/signing
-    to: signing
   - from: resources/licenses
     to: licenses
 # Fuses are switches baked into the Electron binary. Off: running the app as plain Node, NODE_OPTIONS
@@ -41,7 +35,7 @@ mac:
       arch: [arm64, x64]
   # The scan and ADB connection reach devices on the home network.
   extendInfo:
-    NSLocalNetworkUsageDescription: CleanMyTV connects to your Android TV on your home network.
+    NSLocalNetworkUsageDescription: Muzcast se connecte à votre téléviseur Android sur votre réseau local.
 win:
   icon: build/icon.ico
   target:
@@ -49,7 +43,7 @@ win:
       arch: [x64]
 nsis:
   # Hyphens, not spaces: GitHub turns spaces in release asset names into dots.
-  artifactName: CleanMyTV-Setup-${version}.exe
+  artifactName: Muzcast-Setup-${version}.exe
   oneClick: false
   allowToChangeInstallationDirectory: true
 linux:

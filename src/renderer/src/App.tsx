@@ -1,260 +1,510 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import type { ConnStatus, HomeStatus, KnownTv, UpdateInfo } from '@shared/api'
-import { Jump, MOD_KEY, type JumpItem } from './components/Jump'
-import { LogDrawer } from './components/LogDrawer'
-import { NotConnected } from './components/ui'
-import { TvThumb } from './components/TvPicker'
-import { thumbnail } from './lib/image'
-import Guided from './screens/Guided'
-import { Setup } from './screens/Setup'
-import { Debloat } from './screens/Debloat'
-import { HomeLauncher } from './screens/HomeLauncher'
-import { Extras } from './screens/Extras'
-import { Sideload } from './screens/Sideload'
-import { Finish } from './screens/Finish'
-import { version } from '../../../package.json'
-
-const REPO_URL = 'https://github.com/wingedpanther/cleanmytv'
-
-export type StepId = 'guided' | 'setup' | 'debloat' | 'home' | 'extras' | 'sideload' | 'finish'
-
-const STEPS: { id: StepId; label: string; sub: string; needsTv: boolean }[] = [
-  // The guided one-button run (#9): composes the same IPC the step screens
-  // use, so first-time owners get one path while every step stays reachable.
-  { id: 'guided', label: 'Clean & launch', sub: 'One button, every step', needsTv: true },
-  { id: 'setup', label: 'Setup', sub: 'Check and connect', needsTv: false },
-  { id: 'debloat', label: 'Clean up', sub: 'Turn off the bloat', needsTv: true },
-  { id: 'home', label: 'Home screen', sub: 'Install and customise', needsTv: true },
-  { id: 'extras', label: 'TV extras', sub: 'DNS, animations, remote', needsTv: true },
-  { id: 'sideload', label: 'Install an app', sub: 'From an .apk file', needsTv: true },
-  { id: 'finish', label: 'Finish', sub: 'Close the debug port', needsTv: false }
-]
-
+import { useEffect, useState } from 'react'
+import type {
+  ConnStatus,
+  FoundTv,
+  HomeStatus,
+  KnownTv,
+  DownloadProgress,
+} from '@shared/api'
+import { Clean } from './screens/MuzcastClean'
+import logo from './assets/logo.svg'
+import launcher from './assets/launcher.webp'
+import accueil from './assets/accueil.webp'
+import './muzcast.css'
+// Kept for the upstream screens, which remain available to maintainers.
+export type StepId =
+  | 'guided'
+  | 'setup'
+  | 'debloat'
+  | 'home'
+  | 'extras'
+  | 'sideload'
+  | 'finish'
 export interface ScreenProps {
   status: ConnStatus
   go: (step: StepId) => void
   markDone: (step: StepId) => void
-  /** TVs used before, most recent first. */
   tvs: KnownTv[]
   refreshTvs: () => void
-  /** The Home screen step passes on each status it reads, so the sidebar's update note goes after an update. */
   homeSeen: (hs: HomeStatus) => void
 }
-
-// What ⌘K finds. "home:<tab>" opens that tab of the Home screen step.
-const JUMP_ITEMS: JumpItem[] = [
-  ...STEPS.map((s) => ({ id: `step:${s.id}`, title: s.label, where: 'Step', words: s.sub.toLowerCase() })),
-  { id: 'step:setup', title: 'Pair with a code', where: 'Setup', words: 'connect wireless debugging adb ip' },
-  { id: 'step:debloat', title: 'Restore', where: 'Clean up', words: 'undo put back packages' },
-  { id: 'step:debloat', title: 'Add a package', where: 'Clean up', words: 'package app missing list' },
-  { id: 'step:extras', title: 'Animation speed', where: 'TV extras', words: 'animations faster' },
-  { id: 'step:extras', title: 'Block ads inside apps', where: 'TV extras', words: 'dns private ad blocking adguard' },
-  { id: 'step:extras', title: 'Remote', where: 'TV extras', words: 'buttons keys' },
-  { id: 'step:extras', title: 'Storage', where: 'TV extras', words: 'space disk free' },
-  { id: 'step:finish', title: 'Restart check', where: 'Finish', words: 'reboot' },
-  { id: 'home:overview', title: 'Install or update CleanMyTV Home', where: 'Home screen', words: 'launcher stock give back' },
-  { id: 'home:layout', title: 'Layout', where: 'Home screen', words: 'sections quick settings sizes clock greeting idle screensaver' },
-  { id: 'home:apps', title: 'Apps, rows & folders', where: 'Home screen', words: 'dock order hide rename folder row' },
-  { id: 'home:look', title: 'Look & wallpaper', where: 'Home screen', words: 'themes accent colour color focus app icons tile shape wallpaper sunrise picture' },
-  { id: 'home:widgets', title: 'Widgets', where: 'Home screen', words: 'weather' },
-  { id: 'home:music', title: 'Music bars', where: 'Home screen', words: 'visualiser style size' },
-  { id: 'home:buttons', title: 'Remote buttons', where: 'Home screen', words: 'button jobs shortcut key press' },
-  { id: 'home:lock', title: 'App lock', where: 'Home screen', words: 'pin password lock apps' }
-].map((it, i) => ({ ...it, id: `${it.id}#${i}` }))
-
-// A fresh snapshot for the sidebar and the TV list when the last one is older than this.
-const THUMB_MAX_AGE = 6 * 3600_000
-
-export default function App(): ReactNode {
-  const [step, setStep] = useState<StepId>(() => {
-    const h = location.hash.slice(1)
-    return STEPS.some((s) => s.id === h) ? (h as StepId) : 'setup'
-  })
-  const [status, setStatus] = useState<ConnStatus>({ state: 'idle' })
-  const [done, setDone] = useState<Set<StepId>>(new Set())
-  const [tvs, setTvs] = useState<KnownTv[]>([])
-  const [update, setUpdate] = useState<UpdateInfo | null>(null)
-  // The TV runs an older CleanMyTV Home than this app carries.
-  const [homeBehind, setHomeBehind] = useState(false)
-  const [jumping, setJumping] = useState(false)
-  /** A Home tab asked for from ⌘K; n changes each time, so the same tab can be asked for twice. */
-  const [homeTab, setHomeTab] = useState<{ tab: string; n: number } | null>(null)
-
+type Product = 'launcher' | 'muzcast'
+const products = [
+  {
+    id: 'launcher' as Product,
+    name: 'Muzcast TV',
+    role: 'Un nouvel accueil pour votre TV',
+    image: launcher,
+    text: 'Vos applications, vos horaires de prière et un univers qui vous ressemble.',
+  },
+  {
+    id: 'muzcast' as Product,
+    name: 'Muzcast',
+    role: 'Des récits à vivre en grand',
+    image: accueil,
+    text: 'Le catalogue audio, les transcriptions, Muzcast AI Lens et l’adhan complet.',
+  },
+]
+const labels = [
+  'Connecter ma TV',
+  'Installer Muzcast',
+  'Alléger ma TV',
+  'En profiter',
+]
+export default function App() {
+  const [step, setStep] = useState(0),
+    [status, setStatus] = useState<ConnStatus>({ state: 'idle' })
+  const [found, setFound] = useState<FoundTv[]>([]),
+    [host, setHost] = useState(''),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState('')
+  const [pairing, setPairing] = useState(false),
+    [code, setCode] = useState(''),
+    [pairPort, setPairPort] = useState(''),
+    [port, setPort] = useState('')
+  const [selected, setSelected] = useState<Product[]>(['launcher', 'muzcast']),
+    [installed, setInstalled] = useState<Partial<Record<Product, string>>>({}),
+    [active, setActive] = useState<Product | null>(null),
+    [progress, setProgress] = useState<DownloadProgress | null>(null)
   useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        setJumping((j) => !j)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
-
-  function jump(id: string): void {
-    setJumping(false)
-    const [kind, rest] = id.split('#')[0].split(':')
-    if (kind === 'home') {
-      setStep('home')
-      setHomeTab((t) => ({ tab: rest, n: (t?.n ?? 0) + 1 }))
-    } else setStep(rest as StepId)
-  }
-
-  useEffect(() => {
-    window.cytv.checkUpdate().then(setUpdate, () => null)
-  }, [])
-
-  const refreshTvs = useCallback(() => {
-    window.cytv.knownTvs().then(setTvs, () => null)
-  }, [])
-  useEffect(() => {
-    refreshTvs()
-  }, [refreshTvs])
-
-  // On connecting: refresh the TV list and, if its snapshot is missing or old, take a new one quietly.
-  useEffect(() => {
-    if (status.state !== 'connected' || !status.host) return
-    const host = status.host
-    let stale = false
-    window.cytv.knownTvs().then(async (list) => {
-      setTvs(list)
-      const tv = list.find((t) => t.host === host)
-      if (!tv || (tv.thumb && Date.now() - (tv.thumbAt ?? 0) < THUMB_MAX_AGE)) return
-      const shot = await window.cytv.thumbShot().catch(() => null)
-      if (!shot || stale) return
-      setTvs(await window.cytv.saveTvThumb(host, await thumbnail(shot)))
-    }).catch(() => null)
-    return () => { stale = true }
-  }, [status.state, status.host])
-
-  function homeSeen(hs: HomeStatus): void {
-    setHomeBehind(hs.installed && !!hs.bundledVersion && hs.versionName !== hs.bundledVersion)
-  }
-
-  // Checked again on every step change, so the note goes once the Home screen step has updated the TV.
-  useEffect(() => {
-    if (status.state !== 'connected') return setHomeBehind(false)
-    let stale = false
-    window.cytv.homeStatus().then((hs) => { if (!stale) homeSeen(hs) }, () => null)
-    return () => { stale = true }
-  }, [status.state, status.host, step])
-
-  useEffect(() => {
-    // Coming back later to change the wallpaper or the order: reconnect to the last TV by itself.
-    window.cytv.status().then((s) => {
-      setStatus(s)
-      if (s.state !== 'idle') return
-      window.cytv.reconnect().then(async (r) => {
-        if (r?.state !== 'connected') return
-        // A TV that already runs the clean launcher is here to be customised: open that step.
-        // A TV that already runs CleanMyTV Home is here to be customised: open that step.
-        const hs = await window.cytv.homeStatus().catch(() => null)
-        if (hs?.isHome) {
-          setDone((prev) => new Set(prev).add('home'))
-          setStep((cur) => (cur === 'setup' ? 'home' : cur))
-        }
-      }).catch(() => null)
-    })
-    return window.cytv.onStatus(setStatus)
-  }, [])
-
+    setInstalled({})
+    setError('')
+  }, [status.host])
   const connected = status.state === 'connected'
-  const markDone = (s: StepId): void => setDone((prev) => new Set(prev).add(s))
-  const props: ScreenProps = { status, go: setStep, markDone, tvs, refreshTvs, homeSeen }
-  const steps = STEPS
-  const current = steps.find((s) => s.id === step) ?? STEPS[1]
-  const currentTv = connected ? tvs.find((t) => t.host === status.host) : undefined
-
-  let screen: ReactNode
-  if (current.needsTv && !connected) screen = <NotConnected onGo={() => setStep('setup')} />
-  else if (current.id === 'guided') screen = <Guided {...props} />
-  else if (current.id === 'setup') screen = <Setup {...props} />
-  else if (current.id === 'debloat') screen = <Debloat {...props} />
-  else if (current.id === 'home') screen = <HomeLauncher {...props} openTab={homeTab} />
-  else if (current.id === 'extras') screen = <Extras {...props} />
-  else if (current.id === 'sideload') screen = <Sideload {...props} />
-  else screen = <Finish {...props} />
-
+  const demo = !navigator.userAgent.includes('Electron')
+  useEffect(() => {
+    window.cytv.status().then(setStatus)
+    const stop = window.cytv.onStatus(setStatus)
+    const off = window.cytv.onProgress(setProgress)
+    return () => {
+      stop()
+      off()
+    }
+  }, [])
+  useEffect(() => {
+    if (connected || busy || step !== 0) return
+    let live = true
+    const discover = () =>
+      window.cytv.discover().then(
+        (x) => {
+          if (live) setFound(x)
+        },
+        () => {},
+      )
+    discover()
+    const id = setInterval(discover, 3000)
+    return () => {
+      live = false
+      clearInterval(id)
+      void window.cytv.stopDiscovery()
+    }
+  }, [connected, busy, step])
+  async function run(action: () => Promise<void>) {
+    setBusy(true)
+    setError('')
+    try {
+      await action()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function connect(address = host) {
+    await run(async () => {
+      const s = await window.cytv.connect(address.trim())
+      setStatus(s)
+      if (s.needsPairing) setPairing(true)
+      if (s.state === 'error') throw Error(s.error || 'Connexion impossible.')
+    })
+  }
+  async function install() {
+    await run(async () => {
+      for (const p of selected) {
+        if (installed[p]) continue
+        setActive(p)
+        setProgress(null)
+        const r = await window.cytv.installMuzcast(p)
+        setInstalled((x) => ({ ...x, [p]: r.version }))
+      }
+      setActive(null)
+      setStep(2)
+    })
+    setActive(null)
+  }
   return (
-    <div className="app">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark" aria-hidden />
-          <span className="brand-name">CleanMyTV</span>
-        </div>
-        {currentTv?.thumb && (
-          <button className="sidebar-tv" onClick={() => setStep('setup')} title="This TV. Open Setup to switch TVs." style={{ all: 'unset', cursor: 'pointer', display: 'block', marginBottom: 10 }}>
-            <TvThumb tv={currentTv} />
-          </button>
-        )}
-        <ConnPill status={status} />
-        <button className="jump-btn" onClick={() => setJumping(true)}>
-          <span>Find a setting</span>
-          <kbd>{MOD_KEY}K</kbd>
-        </button>
-        <nav>
-          <ol className="steps">
-            {steps.map((s, i) => {
-              const isDone = s.id === 'setup' ? connected : s.id === 'guided' ? done.has('debloat') && done.has('home') : done.has(s.id)
-              return (
-                <li key={s.id}>
-                  <button
-                    className={`step${s.id === step ? ' active' : ''}${isDone ? ' done' : ''}`}
-                    onClick={() => setStep(s.id)}
-                    aria-current={s.id === step ? 'step' : undefined}
-                  >
-                    <span className="step-num">{isDone ? '✓' : i + 1}</span>
-                    <span className="step-label">
-                      {s.label}
-                      <span className="step-sub">{s.id === 'home' && connected && homeBehind ? 'Update ready for this TV' : s.sub}</span>
-                    </span>
-                  </button>
-                </li>
-              )
-            })}
-          </ol>
+    <div className="mz-app">
+      <aside className="mz-sidebar">
+        <img className="mz-logo" src={logo} alt="Muzcast" />
+        <span className="mz-tag">À la maison</span>
+        <p className="mz-intro">
+          Votre univers Muzcast,
+          <br />
+          sur grand écran.
+        </p>
+        <nav aria-label="Étapes">
+          {labels.map((l, i) => (
+            <button
+              key={l}
+              disabled={busy || (i > 0 && !connected)}
+              className={step === i ? 'current' : ''}
+              onClick={() => {
+                setError('')
+                setStep(i)
+              }}
+              aria-current={step === i ? 'step' : undefined}
+            >
+              <span>{i + 1}</span>
+              <div>
+                {l}
+                {i === 2 && <small>Un vrai plus · facultatif</small>}
+              </div>
+            </button>
+          ))}
         </nav>
-        <div className="sidebar-foot">
-          Nothing is uninstalled. Every change can be undone from this app or the TV's Settings → Apps.
-          <a className="gh-link" href={REPO_URL} target="_blank" rel="noreferrer" title="Source, releases and issues on GitHub">
-            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-              <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
-            </svg>
-            <span>wingedpanther/cleanmytv</span>
+        <div className="mz-sidebar-bottom">
+          <span className={'mz-dot ' + (connected ? 'online' : '')} />
+          {connected
+            ? status.probe?.model || 'TV connectée'
+            : 'En attente de votre TV'}
+          <a
+            href="https://tv.muzcast.co/installer/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Besoin d’un coup de main ↗
           </a>
-          <div className="gh-ver">CleanMyTV v{version} · MIT</div>
-          {update?.available && (
-            <a className="update-link" href={update.url} target="_blank" rel="noreferrer">
-              Version {update.latest} is out. Download it
-            </a>
-          )}
+          <small>Fondé sur CleanMyTV · MIT</small>
         </div>
       </aside>
-      <main className="main">
-        <div className="content">{screen}</div>
-        <LogDrawer />
+      <main className="mz-main">
+        {demo && (
+          <div className="mz-demo">
+            Aperçu de l’interface · TV simulée, aucune installation réelle
+          </div>
+        )}
+        <header className="mz-header">
+          <span className="mz-eyebrow">MUZCAST À LA MAISON / 0{step + 1}</span>
+          <h1>
+            {
+              [
+                'Une nouvelle vie pour votre TV.',
+                'Deux apps. Un même univers.',
+                'Faites de la place à l’essentiel.',
+                'Votre TV, à votre image.',
+              ][step]
+            }
+          </h1>
+          <p>
+            {
+              [
+                'Quelques minutes pour réunir vos récits, vos prières et vos applications préférées.',
+                'Le pack complet est sélectionné. Vous pouvez aussi choisir une seule application.',
+                'Une étape utile pour réduire les applications inutiles, à votre rythme.',
+                'Retrouvez Muzcast dans les applications de votre téléviseur.',
+              ][step]
+            }
+          </p>
+        </header>
+        {error && (
+          <div role="alert" className="mz-error">
+            {error}
+          </div>
+        )}
+        {step === 0 && (
+          <>
+            <div className="mz-instructions">
+              <div>
+                <b>1. Le même réseau</b>
+                <p>
+                  Allumez votre TV et connectez-la au même Wi-Fi ou réseau que
+                  cet ordinateur.
+                </p>
+              </div>
+              <div>
+                <b>2. Une autorisation sur la TV</b>
+                <p>
+                  Dans Paramètres → À propos, appuyez 7 fois sur « Build ». Dans
+                  Options développeur, activez le débogage USB ou sans fil.
+                </p>
+              </div>
+              <div>
+                <b>3. Acceptez la connexion</b>
+                <p>
+                  Choisissez votre TV ci-dessous, puis « Autoriser » sur son
+                  écran.
+                </p>
+              </div>
+            </div>
+            <section className="mz-panel">
+              <h2>
+                {connected ? 'Votre TV est prête' : 'Trouver votre téléviseur'}
+              </h2>
+              {connected ? (
+                <>
+                  <p>
+                    {status.probe?.manufacturer} {status.probe?.model} · Android{' '}
+                    {status.probe?.release}
+                  </p>
+                  <button className="mz-primary" onClick={() => setStep(1)}>
+                    Choisir mes applications →
+                  </button>
+                </>
+              ) : (
+                <>
+                  {found.map((t) => (
+                    <button
+                      disabled={busy}
+                      className="mz-device"
+                      key={t.host}
+                      onClick={() => {
+                        setHost(t.host.split(':')[0])
+                        setPairPort(String(t.pairPort || ''))
+                        setPort(String(t.connectPort || ''))
+                        if (t.ready) void connect(t.host)
+                        else setPairing(true)
+                      }}
+                    >
+                      ▣ <strong>{t.name || t.host}</strong>
+                      <span>{t.ready ? 'Connecter →' : 'Associer →'}</span>
+                    </button>
+                  ))}
+                  {!found.length && (
+                    <p className="mz-muted">
+                      Recherche des téléviseurs sur votre réseau…
+                    </p>
+                  )}
+                  <details>
+                    <summary>Ma TV n’apparaît pas</summary>
+                    <p>
+                      L’adresse IP se trouve dans Paramètres → Réseau sur la TV.
+                    </p>
+                    <div className="mz-form">
+                      <label>
+                        Adresse de la TV
+                        <input
+                          placeholder="192.168.1.50:5555"
+                          value={host}
+                          onChange={(e) => setHost(e.target.value)}
+                        />
+                      </label>
+                      <button
+                        disabled={busy || !host}
+                        onClick={() => void connect()}
+                      >
+                        Connecter
+                      </button>
+                      <button
+                        disabled={busy}
+                        onClick={() =>
+                          void run(async () => {
+                            setFound(
+                              (await window.cytv.scan()).map((t) => ({
+                                ...t,
+                                ready: true,
+                                name: t.host,
+                              })),
+                            )
+                          })
+                        }
+                      >
+                        Rechercher à nouveau
+                      </button>
+                    </div>
+                    <button
+                      disabled={busy}
+                      className="mz-link"
+                      onClick={() => setPairing(!pairing)}
+                    >
+                      Ma TV affiche un code d’association
+                    </button>
+                  </details>
+                  {pairing && (
+                    <div className="mz-pair">
+                      <h3>Associer avec le code de la TV</h3>
+                      <p>
+                        Ouvrez Débogage sans fil → Associer un appareil. Le port
+                        d’association et le port de connexion sont différents.
+                      </p>
+                      <div className="mz-form">
+                        {[
+                          ['Adresse IP', host, setHost],
+                          ['Port d’association', pairPort, setPairPort],
+                          ['Code à 6 chiffres', code, setCode],
+                          ['Port de connexion', port, setPort],
+                        ].map(([name, value, set]) => (
+                          <label key={String(name)}>
+                            {String(name)}
+                            <input
+                              value={String(value)}
+                              onChange={(e) =>
+                                (set as (s: string) => void)(e.target.value)
+                              }
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <button
+                        className="mz-primary"
+                        disabled={
+                          busy ||
+                          !/^\d{6}$/.test(code) ||
+                          !host ||
+                          !pairPort ||
+                          !port
+                        }
+                        onClick={() =>
+                          void run(async () => {
+                            await window.cytv.download('platform-tools')
+                            const r = await window.cytv.pair(
+                              host,
+                              Number(pairPort),
+                              code,
+                              Number(port),
+                            )
+                            if (!r.ok)
+                              throw Error([r.summary, ...r.warnings].join(' '))
+                            setStatus(
+                              await window.cytv.connect(`${host}:${port}`),
+                            )
+                          })
+                        }
+                      >
+                        Associer ma TV
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+              {status.state === 'waiting-auth' && (
+                <p role="status">
+                  Regardez votre TV : acceptez la demande d’autorisation.
+                </p>
+              )}
+              {busy && <p role="status">Connexion en cours…</p>}
+            </section>
+          </>
+        )}
+        {step === 1 && (
+          <>
+            <div className="mz-products">
+              {products.map((p) => (
+                <label
+                  className={
+                    'mz-product ' + (selected.includes(p.id) ? 'selected' : '')
+                  }
+                  key={p.id}
+                >
+                  <img src={p.image} alt={p.role} />
+                  <div>
+                    <input
+                      type="checkbox"
+                      disabled={busy}
+                      checked={selected.includes(p.id)}
+                      onChange={(e) =>
+                        setSelected((s) =>
+                          e.target.checked
+                            ? [...s, p.id]
+                            : s.filter((x) => x !== p.id),
+                        )
+                      }
+                    />
+                    <span className="mz-eyebrow">
+                      {p.id === 'launcher' ? 'L’ACCUEIL TV' : 'L’ÉCOUTE'}
+                    </span>
+                    <h2>{p.name}</h2>
+                    <p>{p.text}</p>
+                    {installed[p.id] && (
+                      <strong className="mz-success">
+                        ✓ Installée · {installed[p.id]}
+                      </strong>
+                    )}
+                  </div>
+                </label>
+              ))}
+            </div>
+            <div className="mz-action">
+              <div>
+                <strong>
+                  {active
+                    ? `Installation de ${products.find((p) => p.id === active)?.name}`
+                    : 'Le pack complet, simplement'}
+                </strong>
+                <p>
+                  {active
+                    ? progress?.phase === 'download'
+                      ? 'Téléchargement de la version officielle…'
+                      : 'Transfert et installation sur votre TV…'
+                    : 'Vos applications actuelles restent en place. Les fichiers sont vérifiés avant installation.'}
+                </p>
+                {active && (
+                  <progress
+                    aria-label="Installation"
+                    value={
+                      progress?.total
+                        ? progress.received / progress.total
+                        : undefined
+                    }
+                    max="1"
+                  />
+                )}
+              </div>
+              <button
+                className="mz-primary"
+                disabled={busy || !selected.length || !connected}
+                onClick={() => void install()}
+              >
+                {busy
+                  ? 'Installation en cours…'
+                  : selected.every((p) => installed[p])
+                    ? 'Continuer →'
+                    : `Installer ${selected.length === 2 ? 'les deux apps' : 'l’application'} →`}
+              </button>
+            </div>
+          </>
+        )}
+        {step === 2 && (
+          <Clean
+            onNext={() => setStep(3)}
+            setParentBusy={setBusy}
+            host={status.host || ''}
+          />
+        )}
+        {step === 3 && (
+          <section className="mz-panel mz-finish">
+            <span className="mz-eyebrow">BIENVENUE CHEZ VOUS</span>
+            <h2>À vous le grand écran.</h2>
+            <p>
+              Ouvrez vos applications depuis la télécommande. Pour retrouver
+              Muzcast TV avec le bouton Accueil, choisissez-le dans les
+              paramètres des applications par défaut, si votre TV le permet.
+            </p>
+            <div className="mz-form">
+              {products.map((p) => (
+                <button
+                  disabled={busy}
+                  key={p.id}
+                  className={p.id === 'launcher' ? 'mz-primary' : ''}
+                  onClick={() => void run(() => window.cytv.openMuzcast(p.id))}
+                >
+                  Ouvrir {p.name} ↗
+                </button>
+              ))}
+            </div>
+            <div className="mz-note">
+              <b>Une dernière chose</b>
+              <p>
+                Une fois terminé, vous pouvez désactiver le débogage dans les
+                paramètres de la TV. Les mises à jour restent accessibles
+                directement dans les apps.
+              </p>
+            </div>
+            <a href="https://tv.muzcast.co" target="_blank" rel="noreferrer">
+              Découvrir toutes les fonctionnalités →
+            </a>
+          </section>
+        )}
       </main>
-      {jumping && <Jump items={JUMP_ITEMS} onPick={jump} onClose={() => setJumping(false)} />}
-    </div>
-  )
-}
-
-function ConnPill({ status }: { status: ConnStatus }): ReactNode {
-  const p = status.probe
-  const [dot, text] =
-    status.state === 'connected'
-      ? ['ok', p ? `${p.manufacturer} ${p.model}` : status.host ?? 'Connected']
-      : status.state === 'connecting'
-        ? ['busy', `Connecting to ${status.host ?? 'TV'}`]
-        : status.state === 'waiting-auth'
-          ? ['busy', 'Waiting for Allow on the TV']
-          : status.state === 'error'
-            ? ['err', 'Not connected']
-            : ['idle', 'No TV connected']
-  return (
-    <div className="conn-pill" title={status.error ?? status.host}>
-      <span className={`dot ${dot}`} />
-      <span>{text}</span>
     </div>
   )
 }
