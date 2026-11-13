@@ -42,6 +42,12 @@ Les builds locaux Mac utilisent une signature ad hoc. Une distribution grand pub
 
 Les modules upstream avancés sont conservés pour faciliter les mises à jour du fork, mais ne sont pas exposés par l’interface simplifiée. Leurs textes internes de diagnostic restent parfois en anglais.
 
+## Vérification du paquet natif
+
+La version 0.1.1 corrige le crash avant affichage observé sur macOS 27 : noms internes ASCII cohérents pour le bundle, l’exécutable et les helpers Electron, avec nom français conservé dans CFBundleDisplayName. Les crédits sont dans À propos. La DA reprend les couleurs et le splash Corail de l’app Muzcast.
+
+Après compilation : `node scripts/smoke-packaged.mjs "dist/mac-arm64/MuzcastSetup.app/Contents/MacOS/MuzcastSetup"`. Le test ouvre le vrai paquet, contrôle le bridge natif, À propos et la saisie manuelle. Il ne connecte ni ne modifie aucune TV.
+
 ## Aperçu
 
 ![Installation du pack Muzcast](docs/muzcast/installation.png)

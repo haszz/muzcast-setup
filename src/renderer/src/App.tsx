@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import license from '../../../LICENSE?raw'
+import { version } from '../../../package.json'
 import type {
   ConnStatus,
   FoundTv,
@@ -51,7 +53,14 @@ const labels = [
   'Alléger ma TV',
   'En profiter',
 ]
+function Icon({name}:{name:'tv'|'download'|'sparkles'|'play'|'wifi'|'check'|'shield'}) {
+ const paths={tv:<><rect x="3" y="4" width="18" height="13" rx="3"/><path d="M8 21h8M12 17v4"/></>,download:<><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></>,sparkles:<><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/></>,play:<path d="m8 5 11 7-11 7Z"/>,wifi:<><path d="M3 8a15 15 0 0 1 18 0M6 12a10 10 0 0 1 12 0m-9 4a5 5 0 0 1 6 0"/><circle cx="12" cy="20" r=".6"/></>,check:<path d="m5 12 4 4L19 6"/>,shield:<><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Z"/><path d="m8 12 3 3 5-6"/></>}
+ return <svg className="mz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
+}
 export default function App() {
+  const about = useRef<HTMLDialogElement>(null)
+  const [searchElapsed,setSearchElapsed]=useState(false)
+  useEffect(()=>{const timer=setTimeout(()=>setSearchElapsed(true),8000);return()=>clearTimeout(timer)},[])
   const [step, setStep] = useState(0),
     [status, setStatus] = useState<ConnStatus>({ state: 'idle' })
   const [found, setFound] = useState<FoundTv[]>([]),
@@ -134,6 +143,15 @@ export default function App() {
   }
   return (
     <div className="mz-app">
+      <dialog ref={about} className="mz-about" aria-labelledby="about-title">
+        <form method="dialog"><button aria-label="Fermer À propos">Fermer ×</button></form>
+        <span className="mz-eyebrow">À PROPOS</span>
+        <h2 id="about-title">Muzcast à la maison</h2>
+        <p>Version {version} · Votre univers Muzcast sur grand écran.</p>
+        <p>Fondé sur <a href="https://github.com/wingedpanther/cleanmytv" target="_blank" rel="noreferrer">CleanMyTV</a>, sous licence MIT. Les profils communautaires de nettoyage proviennent de CleanYourTV.</p>
+        <details><summary>Crédits et licence MIT</summary><pre>{license}</pre></details>
+        <p><a href="https://github.com/haszz/muzcast-setup" target="_blank" rel="noreferrer">Code source du projet ↗</a></p>
+      </dialog>
       <aside className="mz-sidebar">
         <img className="mz-logo" src={logo} alt="Muzcast" />
         <span className="mz-tag">À la maison</span>
@@ -154,7 +172,7 @@ export default function App() {
               }}
               aria-current={step === i ? 'step' : undefined}
             >
-              <span>{i + 1}</span>
+              <span className="mz-nav-icon"><Icon name={(['tv','download','sparkles','play'] as const)[i]}/></span>
               <div>
                 {l}
                 {i === 2 && <small>Un vrai plus · facultatif</small>}
@@ -174,7 +192,7 @@ export default function App() {
           >
             Besoin d’un coup de main ↗
           </a>
-          <small>Fondé sur CleanMyTV · MIT</small>
+          <button className="mz-about-link" onClick={() => about.current?.showModal()}>À propos</button>
         </div>
       </aside>
       <main className="mz-main">
@@ -184,11 +202,11 @@ export default function App() {
           </div>
         )}
         <header className="mz-header">
-          <span className="mz-eyebrow">MUZCAST À LA MAISON / 0{step + 1}</span>
+          <div className="mz-header-meta"><span className="mz-eyebrow">BIENVENUE CHEZ VOUS</span><span className="mz-step-count">Étape {step + 1} sur 4</span></div>
           <h1>
             {
               [
-                'Une nouvelle vie pour votre TV.',
+                'Installons Muzcast sur votre TV.',
                 'Deux apps. Un même univers.',
                 'Faites de la place à l’essentiel.',
                 'Votre TV, à votre image.',
@@ -212,33 +230,34 @@ export default function App() {
           </div>
         )}
         {step === 0 && (
-          <>
-            <div className="mz-instructions">
+          <div className="mz-connection-layout">
+            <div className="mz-instructions"><h2>Préparez votre TV</h2><p className="mz-guide-intro">Prenez votre télécommande, on vous guide.</p>
               <div>
-                <b>1. Le même réseau</b>
+                <span className="mz-instruction-number">1</span><b>Le même réseau</b>
                 <p>
                   Allumez votre TV et connectez-la au même Wi-Fi ou réseau que
                   cet ordinateur.
                 </p>
               </div>
               <div>
-                <b>2. Une autorisation sur la TV</b>
+                <span className="mz-instruction-number">2</span><b>Autorisez la connexion</b>
                 <p>
                   Dans Paramètres → À propos, appuyez 7 fois sur « Build ». Dans
                   Options développeur, activez le débogage USB ou sans fil.
                 </p>
               </div>
               <div>
-                <b>3. Acceptez la connexion</b>
+                <span className="mz-instruction-number">3</span><b>Confirmez sur votre TV</b>
                 <p>
-                  Choisissez votre TV ci-dessous, puis « Autoriser » sur son
+                  Choisissez votre TV dans la liste, puis « Autoriser » sur son
                   écran.
                 </p>
               </div>
             </div>
-            <section className="mz-panel">
+            <section className="mz-panel mz-connect-panel">
+              <div className="mz-discovery-top"><span className="mz-device-icon"><Icon name={connected?'check':'tv'}/></span><span className="mz-detection"><span className={'mz-dot '+(connected?'online':'')}/>{connected?'TV connectée':'Détection automatique'}</span></div>
               <h2>
-                {connected ? 'Votre TV est prête' : 'Trouver votre téléviseur'}
+                {connected ? 'Votre TV est prête' : 'Connecter votre TV'}
               </h2>
               {connected ? (
                 <>
@@ -265,17 +284,15 @@ export default function App() {
                         else setPairing(true)
                       }}
                     >
-                      ▣ <strong>{t.name || t.host}</strong>
+                      <Icon name="tv"/> <strong>{t.name || t.host}</strong>
                       <span>{t.ready ? 'Connecter →' : 'Associer →'}</span>
                     </button>
                   ))}
                   {!found.length && (
-                    <p className="mz-muted">
-                      Recherche des téléviseurs sur votre réseau…
-                    </p>
+                    <div className="mz-discovery-state" role="status"><span className="mz-search-indicator"/><div><strong>{searchElapsed?'Aucune TV détectée pour le moment':'Recherche de votre téléviseur…'}</strong><p>Gardez votre TV allumée, sur le même réseau. Elle apparaîtra ici dès qu’elle sera détectée.</p></div></div>
                   )}
                   <details>
-                    <summary>Ma TV n’apparaît pas</summary>
+                    <summary><Icon name="wifi"/> Ma TV n’apparaît pas <span>＋</span></summary>
                     <p>
                       L’adresse IP se trouve dans Paramètres → Réseau sur la TV.
                     </p>
@@ -383,7 +400,7 @@ export default function App() {
               )}
               {busy && <p role="status">Connexion en cours…</p>}
             </section>
-          </>
+          </div>
         )}
         {step === 1 && (
           <>

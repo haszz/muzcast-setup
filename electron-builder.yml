@@ -1,5 +1,8 @@
 appId: co.muzcast.setup
-productName: Muzcast à la maison
+# Keep internal bundle/helper names ASCII: accented productName crashed before JS on macOS 27.
+# CFBundleDisplayName below retains the French user-facing name.
+productName: Muzcast Setup
+executableName: MuzcastSetup
 directories:
   output: dist
   buildResources: build
@@ -35,6 +38,7 @@ mac:
       arch: [arm64, x64]
   # The scan and ADB connection reach devices on the home network.
   extendInfo:
+    CFBundleDisplayName: Muzcast à la maison
     NSLocalNetworkUsageDescription: Muzcast se connecte à votre téléviseur Android sur votre réseau local.
 win:
   icon: build/icon.ico
