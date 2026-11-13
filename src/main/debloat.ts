@@ -8,6 +8,7 @@ import { join, resolve } from 'node:path'
 import { paths } from './paths'
 import { log } from './log'
 import * as T from './tv'
+import { profileMatch } from '@shared/profile-match'
 import type { ApplyResult, DebloatApplyRequest, DebloatEntry, DebloatListSummary, DebloatPlan, PackageState, Probe } from '@shared/api'
 
 const TASK = 'debloat'
@@ -93,16 +94,17 @@ interface Upstream {
   /** From the list's tv.json: every model the list was checked on, and the brand. */
   tv: string
   brand: string
+  os: string
 }
 
 let upstreamCache: Upstream[] | null = null
 
-function readTvJson(file: string): { tv: string; brand: string } {
+function readTvJson(file: string): { tv: string; brand: string; os: string } {
   try {
-    const j = JSON.parse(readFileSync(file, 'utf8')) as { tv?: unknown; brand?: unknown }
-    return { tv: typeof j.tv === 'string' ? j.tv : '', brand: typeof j.brand === 'string' ? j.brand : '' }
+    const j = JSON.parse(readFileSync(file, 'utf8')) as { tv?: unknown; brand?: unknown; os?: unknown }
+    return { tv: typeof j.tv === 'string' ? j.tv : '', brand: typeof j.brand === 'string' ? j.brand : '', os: typeof j.os === 'string' ? j.os : '' }
   } catch {
-    return { tv: '', brand: '' }
+    return { tv: '', brand: '', os: '' }
   }
 }
 
@@ -117,7 +119,7 @@ function upstreamLists(): Upstream[] {
         const text = readFileSync(file, 'utf8')
         const parsed = parseList(text, `${id}/debloat.txt`)
         const meta = readTvJson(join(paths.examples, id, 'tv.json'))
-        out.push({ id, title: parsed.header[0] ?? id, text, parsed, tv: meta.tv, brand: meta.brand })
+        out.push({ id, title: parsed.header[0] ?? id, text, parsed, tv: meta.tv, brand: meta.brand, os: meta.os })
       } catch (e) {
         log(TASK, 'warn', `skipping upstream list ${id}: ${(e as Error).message}`)
       }
@@ -186,13 +188,14 @@ export function lists(probe: Probe | undefined): DebloatListSummary[] {
   const all = upstreamLists().map((l) => ({
     id: l.id,
     title: l.title,
+    match: probe ? profileMatch(l, probe) : undefined,
     score: probe ? matchScore(l.id, l.parsed.header, probe, l.tv) : 0,
     sameBrand: !!probe && sameBrand(l.brand, probe.manufacturer)
   }))
   // Lists from the TV's own brand come next after real matches. They keep score 0: a brand alone
   // is no reason for the guided run to pick a list.
   all.sort((a, b) => b.score - a.score || Number(b.sameBrand) - Number(a.sameBrand) || a.id.localeCompare(b.id))
-  const out: DebloatListSummary[] = all.map(({ id, title, score }) => ({ id, title, score }))
+  const out: DebloatListSummary[] = all.map(({ id, title, score, match }) => ({ id, title, score, match }))
   // Device-family fallback (#2): when no list matches the TV on model/device (best exact score
   // < 5), infer one from the manufacturer so unlisted models of a known family still start from
   // that family's list instead of the generic one. The entry keeps the base list's id (so

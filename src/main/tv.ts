@@ -3,12 +3,15 @@
 import { createHash } from 'node:crypto'
 import { networkInterfaces } from 'node:os'
 import { AdbClient, AdbError } from './adb/client'
+import { shouldUseRelay, startRelay, type RelaySession } from './relay'
 import { loadKeys } from './adb/keys'
 import { diagnose, errnoOf } from './doctor'
 import { log } from './log'
 import type { ConnStatus, Probe } from '@shared/api'
 
 let client: AdbClient | null = null
+let relay: RelaySession | null = null
+let connectionAbort = new AbortController()
 let status: ConnStatus = { state: 'idle' }
 let keyPath = ''
 let statusListener: (s: ConnStatus) => void = () => {}
@@ -36,6 +39,8 @@ export function report(s: ConnStatus): ConnStatus {
 export async function connect(host: string): Promise<ConnStatus> {
   host = host.trim()
   disconnect()
+  const attempt = connectionAbort
+  let ownedRelay: RelaySession | null = null
   setStatus({ state: 'connecting', host })
   try {
     // "ip" or "ip:port"; the record and messages use the IP, as upstream's TV_HOST does.
@@ -43,22 +48,44 @@ export async function connect(host: string): Promise<ConnStatus> {
     if (!m || (m[2] && (Number(m[2]) < 1 || Number(m[2]) > 65535))) {
       return setStatus({ state: 'error', host, error: 'That is not an address. Type the IP the TV shows under Settings → Network, like 192.168.1.50.' })
     }
-    const c = await AdbClient.connect({
+    const options = {
       host: m[1],
       port: m[2] ? Number(m[2]) : 5555,
       keys: loadKeys(keyPath),
-      onAuthPrompt: () => setStatus({ state: 'waiting-auth', host })
-    })
+      onAuthPrompt: () => { if (!attempt.signal.aborted) setStatus({ state: 'waiting-auth', host,transport:relay?'relay':'direct' }) }
+    }
+    let c: AdbClient
+    let viaRelay = false
+    try { c = await AdbClient.connect(options) } catch (directError) {
+      if (attempt.signal.aborted || !shouldUseRelay(directError as AdbError, m[1])) throw directError
+      setStatus({state:'connecting',host,transport:'relay'})
+      ownedRelay = await startRelay(m[1],options.port,attempt.signal)
+      if(attempt.signal.aborted){ownedRelay.stop();return status}
+      relay = ownedRelay
+      viaRelay = true
+      try {
+        c = await AdbClient.connect({...options,host:'127.0.0.1',port:ownedRelay.port,relayToken:ownedRelay.token,handshakeTimeoutMs:60000})
+      } catch (relayError) {
+        ownedRelay.stop(); if(relay===ownedRelay)relay=null
+        if (['auth','tls','protocol'].includes((relayError as AdbError).code)) throw relayError
+        throw new Error(ownedRelay.failure?.() ?? 'La connexion de secours n’a pas abouti. Autorisez Muzcast · Connexion TV si macOS le demande, puis réessayez. Vérifiez aussi que la TV est allumée et que le débogage reste actif.')
+      }
+    }
+    if(attempt.signal.aborted){c.close();return status}
     c.onClose = (err) => {
       if (client === c) {
         client = null
+        relay?.stop(); relay=null
         setStatus({ state: 'error', host, error: `Lost the TV: ${err.message}` })
       }
     }
     client = c
     const probe = await readProbe(c, m[1])
-    return setStatus({ state: 'connected', host, probe })
+    return setStatus({ state: 'connected', host, probe, transport:viaRelay?'relay':'direct' })
   } catch (e) {
+    if(attempt.signal.aborted)return status
+    client?.close(); client=null
+    relay?.stop(); relay=null
     const err = e as AdbError
     const m = /^([A-Za-z0-9.-]+)(?::(\d{1,5}))?$/.exec(host)
     const hints = m ? diagnose({ code: err.code, errno: errnoOf(err.message ?? ''), host: m[1], port: m[2] ? Number(m[2]) : 5555 }, networkInterfaces(), process.platform) : []
@@ -84,6 +111,9 @@ function friendly(err: AdbError): string {
 }
 
 export function disconnect(): void {
+  connectionAbort.abort()
+  connectionAbort = new AbortController()
+  relay?.stop(); relay=null
   if (client) {
     const c = client
     client = null

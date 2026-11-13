@@ -7,6 +7,7 @@ import { configurePaths, paths } from './paths'
 import { log, setSinks } from './log'
 import * as T from './tv'
 import * as debloat from './debloat'
+import { appMetadata } from './app-metadata'
 import * as launcher from './launcher'
 import * as system from './system'
 import * as sideload from './sideload'
@@ -150,6 +151,7 @@ const handlers: Omit<Handlers, 'onLog' | 'onProgress' | 'onStatus'> = {
     if (!st.installed) return { ok: false, summary: 'CleanMyTV Home is not installed yet.', warnings: [] }
     return launcher.switchTo(`${launcher.HOME_PKG}/.MainActivity`, typeof stock === 'string' ? stock : undefined)
   },
+  appMetadata,
   homeApps: () => home.apps(),
   readHomeConfig: () => home.readConfig(),
   setRemoteButtons: (on) => home.setRemoteButtons(on === true),

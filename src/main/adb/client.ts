@@ -71,9 +71,12 @@ interface Stream {
 
 export interface ConnectOptions {
   host: string
+  /** Private token for the bundled loopback relay, never sent to the TV. */
+  relayToken?: string
   port?: number
   keys: AdbKey[]
   /** How long to wait for the user to press Allow on the TV. */
+  handshakeTimeoutMs?: number
   authTimeoutMs?: number
   /** Called when the TV is showing the "Allow USB debugging?" prompt. */
   onAuthPrompt?: () => void
@@ -95,7 +98,7 @@ export class AdbClient {
 
   static async connect(opts: ConnectOptions): Promise<AdbClient> {
     const client = new AdbClient()
-    await client.open(opts)
+    try { await client.open(opts) } catch (error) { client.socket?.destroy(); throw error }
     return client
   }
 
@@ -122,7 +125,7 @@ export class AdbClient {
         s.destroy()
         reject(new AdbError(`${opts.host}:${port} did not answer within 8 seconds.`, 'timeout'))
       }, 8000)
-      s.once('connect', () => { clearTimeout(timer); resolve(s) })
+      s.once('connect', () => { clearTimeout(timer); if (opts.relayToken) s.write(opts.relayToken); resolve(s) })
       s.once('error', (e: NodeJS.ErrnoException) => {
         clearTimeout(timer)
         if (e.code === 'ECONNREFUSED') reject(new AdbError(`${opts.host} refused port ${port}: network debugging is off.`, 'refused'))
@@ -135,7 +138,7 @@ export class AdbClient {
     this.socket.on('error', (e) => this.fail(new AdbError(`connection error: ${e.message}`, 'closed')))
 
     this.send(A_CNXN, VERSION, MAX_DATA, Buffer.from('host::\0'))
-    let packet = await this.read(10000)
+    let packet = await this.read(opts.handshakeTimeoutMs ?? 10000)
     if (packet.cmd === A_STLS) {
       this.close()
       throw new AdbError('this port uses Wireless debugging, which needs a one-time pairing code.', 'tls')

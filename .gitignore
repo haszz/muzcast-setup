@@ -17,3 +17,14 @@ adbkey.pub
 
 .env*
 !.env.example
+
+resources/relay/
+
+.relay-build-venv/
+.relay-build/
+
+native/relay/python/__pycache__/
+
+.metadata-build/
+
+.release-python/

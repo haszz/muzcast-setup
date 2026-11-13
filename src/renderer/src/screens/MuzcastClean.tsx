@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react'
-import { protectedApp, appExplanation } from '@shared/cleanup'
-import type { DebloatListSummary, DebloatPlan } from '@shared/api'
+import { protectedApp } from '@shared/cleanup'
+import { CleanupAppCard, cleanupAppTitle } from '../components/CleanupAppCard'
+import { recommendedProfile } from '@shared/profile-match'
+import type { DebloatListSummary, DebloatPlan, Probe, AppMetadata } from '@shared/api'
 export function Clean({
   onNext,
   setParentBusy,
   host,
+  probe,
 }: {
   onNext: () => void
   setParentBusy: (b: boolean) => void
   host: string
+  probe?: Probe
 }) {
   const [lists, setLists] = useState<DebloatListSummary[]>([]),
     [plan, setPlan] = useState<DebloatPlan | null>(null),
@@ -17,12 +21,63 @@ export function Clean({
     [review, setReview] = useState(false),
     [message, setMessage] = useState(''),
     [error, setError] = useState(''),
-    [query, setQuery] = useState('')
+    [query, setQuery] = useState(''),
+    [detecting, setDetecting] = useState(true),
+    [automatic, setAutomatic] = useState<DebloatListSummary | undefined>(),
+    [manual, setManual] = useState(false),
+    [metadata, setMetadata] = useState<Record<string, AppMetadata>>({}),
+    [readingApps, setReadingApps] = useState(false),
+    [appReadError, setAppReadError] = useState(false),
+    [onlySelected, setOnlySelected] = useState(false)
   useEffect(() => {
+    let cancelled = false
     setPlan(null)
+    setLists([])
     setChosen([])
-    window.cytv.lists().then(setLists, (e) => setError(String(e)))
-  }, [host])
+    setReview(false)
+    setMessage('')
+    setError('')
+    setAutomatic(undefined)
+    setManual(false)
+    setDetecting(true)
+    void (async () => {
+      try {
+        const available = await window.cytv.lists()
+        if (cancelled) return
+        setLists(available)
+        const selected = recommendedProfile(available)
+        if (selected) {
+          const detectedPlan = await window.cytv.plan(selected.id)
+          if (cancelled) return
+          setPlan(detectedPlan)
+          setAutomatic(selected)
+        }
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+      } finally {
+        if (!cancelled) setDetecting(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [host, probe?.model, probe?.device, probe?.product, probe?.release])
+  useEffect(() => {
+    let cancelled = false
+    setMetadata({})
+    setAppReadError(false)
+    setOnlySelected(false)
+    const packages = plan?.entries.filter(entry => entry.state === 'enabled' && !protectedApp(entry.pkg)).map(entry => entry.pkg) || []
+    if (!packages.length) { setReadingApps(false); return }
+    setReadingApps(true)
+    void window.cytv.appMetadata(packages).then(rows => {
+      if (!cancelled) {
+        setMetadata(Object.fromEntries(rows.map(row => [row.pkg,row])))
+        setAppReadError(rows.length === 0)
+      }
+    }, () => { if (!cancelled) setAppReadError(true) }).finally(() => { if (!cancelled) setReadingApps(false) })
+    return () => { cancelled = true }
+  }, [plan, host])
+  const available = plan?.entries.filter(entry => entry.state === 'enabled' && !protectedApp(entry.pkg)) || []
+  const visible = available.filter(entry => (!onlySelected || chosen.includes(entry.pkg)) && (!query || `${cleanupAppTitle(entry.pkg,metadata[entry.pkg])} ${entry.pkg} ${entry.note}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())))
   async function run(fn: () => Promise<void>) {
     setBusy(true)
     setParentBusy(true)
@@ -84,13 +139,25 @@ export function Clean({
           garantissent pas la compatibilité de chaque application avec votre
           modèle. En cas de doute, gardez-la activée.
         </p>
+        <div className="mz-note" role="status">
+          <b>{detecting ? 'Identification du profil…' : manual ? 'Profil choisi manuellement' : automatic ? 'Profil proposé automatiquement' : 'Votre téléviseur est identifié'}</b>
+          {probe && <p>{probe.manufacturer} {probe.model} · Android {probe.release}{probe.device ? ` · Plateforme ${probe.device}` : ''}</p>}
+          {!detecting && <p>{manual ? 'Vous avez choisi ce profil. Vérifiez les applications proposées avant de confirmer votre sélection.' : automatic
+            ? automatic.match === 'model'
+              ? 'La référence annoncée par votre TV correspond à ce profil. Vous pouvez en choisir un autre.'
+              : `Ce profil correspond à la plateforme ${probe?.device || 'détectée'}, partagée par plusieurs modèles. La référence commerciale exacte n’est pas confirmée.`
+            : 'Aucun profil unique ne correspond aux informations annoncées par la TV. Choisissez un profil ci-dessous ou passez cette étape.'}</p>}
+          {!detecting && automatic && <p>Aucune application n’est sélectionnée pour être désactivée.</p>}
+        </div>
         <label>
           Profil du téléviseur
           <select
-            disabled={busy}
+            disabled={busy || detecting}
             value={plan?.listId || ''}
             onChange={(e) => {
               const id = e.target.value
+              setManual(Boolean(id))
+              if (!id) { setPlan(null); setChosen([]); setReview(false); return }
               if (id)
                 void run(async () => {
                   setPlan(await window.cytv.plan(id))
@@ -104,7 +171,7 @@ export function Clean({
             {lists.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.title}
-                {l.score > 0 ? ' · correspondance possible' : ''}
+                {l.match === 'model' ? ' · modèle correspondant' : l.match === 'platform' ? ' · plateforme correspondante' : l.score > 0 ? ' · à vérifier' : ''}
               </option>
             ))}
           </select>
@@ -126,48 +193,25 @@ export function Clean({
               la voix et les services système sensibles sont exclus des choix
               proposés.
             </p>
-            <label>
-              Rechercher une application
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Nom ou identifiant…"
-              />
-            </label>
-            <div className="mz-packages">
-              {plan.entries
-                .filter(
-                  (e) =>
-                    e.state === 'enabled' &&
-                    !protectedApp(e.pkg) &&
-                    (!query ||
-                      `${e.pkg} ${e.note}`
-                        .toLowerCase()
-                        .includes(query.toLowerCase())),
-                )
-                .map((e) => (
-                  <label key={e.pkg} className="mz-package">
-                    <input
-                      type="checkbox"
-                      checked={chosen.includes(e.pkg)}
-                      disabled={busy}
-                      onChange={(ev) => {
-                        setReview(false)
-                        setChosen((s) =>
-                          ev.target.checked
-                            ? [...s, e.pkg]
-                            : s.filter((p) => p !== e.pkg),
-                        )
-                      }}
-                    />
-                    <span>
-                      <b>{appExplanation(e.pkg).title}</b>
-                      <small>{appExplanation(e.pkg).description}</small>
-                      <small>{e.pkg}</small>
-                    </span>
-                  </label>
-                ))}
+            <div className="mz-apps-toolbar">
+              <div><h3>Applications présentes sur votre TV</h3><p>{available.length} applications dans ce profil · {chosen.length} sélectionnées</p></div>
+              <label>Rechercher une application
+                <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Nom de l’application…" />
+              </label>
             </div>
+            <div className="mz-app-filters">
+              <button type="button" aria-pressed={!onlySelected} onClick={()=>setOnlySelected(false)}>Toutes ({available.length})</button>
+              <button type="button" aria-pressed={onlySelected} onClick={()=>setOnlySelected(true)}>Ma sélection ({chosen.length})</button>
+            </div>
+            {readingApps && <p className="mz-app-read-status" role="status">Lecture des noms et icônes depuis votre TV…</p>}
+            {appReadError && <p className="mz-app-read-status">La TV n’a pas fourni les noms et icônes. Les identifiants restent disponibles dans les détails.</p>}
+            <div className="mz-app-grid">
+              {visible.map(entry => <CleanupAppCard key={entry.pkg} entry={entry} metadata={metadata[entry.pkg]} selected={chosen.includes(entry.pkg)} disabled={busy} onChange={checked=>{
+                setReview(false)
+                setChosen(current=>checked?[...current,entry.pkg]:current.filter(pkg=>pkg!==entry.pkg))
+              }} />)}
+            </div>
+            {!visible.length && <p className="mz-app-empty">{onlySelected ? 'Votre sélection est vide. Toutes les applications sont conservées.' : query ? 'Aucune application ne correspond à cette recherche.' : 'Aucune application à alléger dans ce profil sur votre TV.'}</p>}
             <div className="mz-form">
               <button
                 className="mz-primary"
@@ -211,7 +255,7 @@ export function Clean({
                 <ul>
                   {chosen.map((p) => (
                     <li key={p}>
-                      {appExplanation(p).title} · {p}
+                      {cleanupAppTitle(p,metadata[p])} · {p}
                     </li>
                   ))}
                 </ul>

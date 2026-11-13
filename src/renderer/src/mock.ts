@@ -211,11 +211,12 @@ export function installMock(): void {
       return 'CleanMyTV 0.0.0-dev, darwin 25.0.0 arm64\nTV: Sony BRAVIA 4K VH2 (device BRAVIA_VH2, product BRAVIA_VH2_EU), Android 12 (SDK 31), build mock'
     },
     download: (tool) => fakeDownload(tool),
+    async appMetadata(packages) { return packages.map(pkg=>({pkg,label:pkg.split('.').at(-1) || pkg,system:true})) },
     async lists() {
       await wait(200)
       return [
         { id: 'custom', title: 'My TV is not listed: pick from packages other TVs disable', score: 0 },
-        { id: 'sony-bravia-9-ii', title: 'Sony BRAVIA 9 II, K-65XR90M2 (2026, device BRAVIA_AE3, MediaTek MT5838)', score: 9 },
+        { id: 'sony-bravia-9-ii', title: 'Sony BRAVIA 9 II, K-65XR90M2 (2026, device BRAVIA_AE3, MediaTek MT5838)', score: 9, match: 'model' },
         { id: 'sony-bravia-4k-ae2', title: 'Sony BRAVIA 4K AE2 (BRAVIA_AE2, MediaTek MT5897), North America', score: 3 },
         { id: 'tcl-g10-google-tv', title: 'TCL 55" 4K Google TV, 2023 (G10, Realtek RTD2875P)', score: 0 },
         { id: 'xiaomi-mi-box-s', title: 'Xiaomi Mi Box S (MIBOX4, oneday), streaming box', score: 0 },

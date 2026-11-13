@@ -20,6 +20,7 @@ export interface Probe {
 export type ConnState = 'idle' | 'connecting' | 'waiting-auth' | 'connected' | 'error'
 
 export interface ConnStatus {
+  transport?: 'direct' | 'relay'
   state: ConnState
   host?: string
   /** Plain-language reason when state is error. */
@@ -67,6 +68,8 @@ export interface CheckItem {
 export type ToolId = 'jdk' | 'sdk' | 'platform-tools'
 
 export interface DebloatListSummary {
+  /** Confirmed model metadata, or an explicitly named device platform; never brand alone. */
+  match?: 'model' | 'platform'
   /** Folder name in upstream examples/, or "custom". */
   id: string
   /** First header line of the list, without the leading "# ". */
@@ -357,6 +360,14 @@ export interface InstallResult extends ApplyResult {
   incompatible?: boolean
 }
 
+export interface AppMetadata {
+  pkg: string
+  label: string
+  /** PNG rendered by PackageManager on the connected TV. */
+  icon?: string
+  system: boolean
+}
+
 export interface TvApp {
   pkg: string
   label: string
@@ -472,6 +483,7 @@ export interface CytvApi {
   /** Make the installed CleanMyTV Home the Home screen. */
   useHome(stock?: string): Promise<ApplyResult>
   /** The apps CleanMyTV Home shows, named as on the TV. */
+  appMetadata(packages: string[]): Promise<AppMetadata[]>
   homeApps(): Promise<TvApp[]>
   readHomeConfig(): Promise<HomeConfig>
   /** Applies on the TV straight away; returns what the launcher now has. */

@@ -1,4 +1,5 @@
 appId: co.muzcast.setup
+afterPack: scripts/mac-identity.cjs
 # Keep internal bundle/helper names ASCII: accented productName crashed before JS on macOS 27.
 # CFBundleDisplayName below retains the French user-facing name.
 productName: Muzcast Setup
@@ -10,6 +11,8 @@ files:
   - out/**
   - package.json
 extraResources:
+  - from: resources/app-metadata.dex
+    to: app-metadata.dex
   - from: resources/upstream
     to: upstream
   - from: resources/licenses
@@ -24,6 +27,9 @@ electronFuses:
   # onlyLoadAppFromAsar stays off: with it the unsigned build exits at launch, and it adds little
   # without code signing and asar integrity checks.
 mac:
+  extraResources:
+    - from: resources/relay
+      to: relay
   category: public.app-category.utilities
   icon: build/icon.icns
   # No Developer ID certificate, so sign ad hoc ("-"). Left unsigned, the bundle keeps Electron's
@@ -39,6 +45,7 @@ mac:
   # The scan and ADB connection reach devices on the home network.
   extendInfo:
     CFBundleDisplayName: Muzcast à la maison
+    NSBonjourServices: ["_adb._tcp", "_androidtvremote2._tcp", "_adb-tls-connect._tcp", "_adb-tls-pairing._tcp"]
     NSLocalNetworkUsageDescription: Muzcast se connecte à votre téléviseur Android sur votre réseau local.
 win:
   icon: build/icon.ico

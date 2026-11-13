@@ -261,7 +261,7 @@ export default function App() {
               </div>
             </div>
             <section className="mz-panel mz-connect-panel">
-              <div className="mz-discovery-top"><span className="mz-device-icon"><Icon name={connected?'check':'tv'}/></span><span className="mz-detection"><span className={'mz-dot '+(connected?'online':'')}/>{connected?'TV connectée':'Détection automatique'}</span></div>
+              <div className="mz-discovery-top"><span className="mz-device-icon"><Icon name={connected?'check':'tv'}/></span><span className="mz-detection"><span className={'mz-dot '+(connected?'online':'')}/>{connected?(status.transport === 'relay' ? 'TV connectée · connexion de secours' : 'TV connectée'):'Détection automatique'}</span></div>
               <h2>
                 {connected ? 'Votre TV est prête' : 'Connecter votre TV'}
               </h2>
@@ -404,7 +404,7 @@ export default function App() {
                   Regardez votre TV : acceptez la demande d’autorisation.
                 </p>
               )}
-              {busy && <p role="status">Connexion en cours…</p>}
+              {busy && <p role="status">{status.transport === 'relay' ? 'Connexion de secours automatique… Si macOS le demande, autorisez Muzcast · Connexion TV.' : 'Connexion en cours…'}</p>}
             </section>
           </div>
         )}
@@ -491,6 +491,7 @@ export default function App() {
             onNext={() => setStep(3)}
             setParentBusy={setBusy}
             host={status.host || ''}
+            probe={status.probe}
           />
         )}
         {step === 3 && (

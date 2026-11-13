@@ -47,6 +47,6 @@ export function appExplanation(pkg: string): {
   return {
     title: pkg,
     description:
-      'Application préinstallée. Si vous ne reconnaissez pas son rôle, laissez-la activée.',
+      'Rôle non identifié automatiquement. Si vous utilisez cette application ou ne la reconnaissez pas, laissez-la activée.',
   }
 }

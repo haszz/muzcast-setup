@@ -1,7 +1,7 @@
 {
   "name": "muzcast-setup",
   "productName": "Muzcast à la maison",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Installer Muzcast TV et Muzcast sur votre téléviseur Android.",
   "license": "MIT",
   "author": "Muzcast — based on CleanMyTV by Vivek",
@@ -21,8 +21,10 @@
     "test": "vitest run",
     "sync": "node scripts/sync-upstream.mjs",
     "home": "tsx scripts/build-home.ts",
-    "dist:mac": "electron-vite build && electron-builder --mac --publish never",
-    "dist:win": "electron-vite build && electron-builder --win --publish never"
+    "dist:mac": "npm run build:relay && electron-vite build && electron-builder --mac --publish never",
+    "dist:win": "electron-vite build && electron-builder --win --publish never",
+    "build:relay": "node scripts/build-relay.mjs",
+    "build:app-metadata": "node scripts/build-app-metadata.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
