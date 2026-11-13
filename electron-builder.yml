@@ -45,7 +45,11 @@ win:
   target:
     - target: nsis
       arch: [x64]
+protocols:
+  - name: Muzcast Setup
+    schemes: [muzcastsetup]
 nsis:
+  include: build/attribution.nsh
   # Hyphens, not spaces: GitHub turns spaces in release asset names into dots.
   artifactName: Muzcast-Setup-${version}.exe
   oneClick: false

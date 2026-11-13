@@ -58,6 +58,10 @@ function Icon({name}:{name:'tv'|'download'|'sparkles'|'play'|'wifi'|'check'|'shi
  return <svg className="mz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
 }
 export default function App() {
+  const [measurement,setMeasurement]=useState<{enabled:boolean|null;pendingLink:boolean;linked:boolean}|null>(null)
+  const [measureOpen,setMeasureOpen]=useState(false),[linkCode,setLinkCode]=useState(''),[measureError,setMeasureError]=useState('')
+  useEffect(()=>{if(!window.cytv.telemetryStatus)return;const check=()=>window.cytv.telemetryStatus().then(s=>{setMeasurement(s);if(s.enabled===null||s.pendingLink)setMeasureOpen(true)});void check();const timer=setInterval(check,1500);return()=>clearInterval(timer)},[])
+  async function measurementChoice(enabled:boolean){try{setMeasurement(await window.cytv.telemetryPreference(enabled,linkCode));setMeasureOpen(false);setLinkCode('');setMeasureError('')}catch{setMeasureError('Code invalide ou expiré. Recopiez le code du site.')}}
   const about = useRef<HTMLDialogElement>(null)
   const [searchElapsed,setSearchElapsed]=useState(false)
   useEffect(()=>{const timer=setTimeout(()=>setSearchElapsed(true),8000);return()=>clearTimeout(timer)},[])
@@ -143,11 +147,13 @@ export default function App() {
   }
   return (
     <div className="mz-app">
+      {measureOpen&&measurement&&<section className="mz-measure" aria-label="Mesure d’usage"><h2>Nous aider à améliorer l’installation ?</h2><p>Avec votre accord : étapes, réussites et erreurs, sans adresse de TV, code d’association, contenu saisi ni enregistrement d’écran.</p>{measurement.pendingLink&&<p><strong>Un parcours du site a été retrouvé.</strong> Accepter le reliera à cet assistant. Refuser permet de continuer sans suivi.</p>}<label>Code du site (facultatif)<input value={linkCode} onChange={e=>setLinkCode(e.target.value)} placeholder="MTV1.…" /></label><p role="status">{measureError}</p><div><button onClick={()=>void measurementChoice(true)}>Accepter{measurement.pendingLink||linkCode?' et relier':''}</button><button onClick={()=>void measurementChoice(false)}>Refuser</button>{measurement.enabled!==null&&!measurement.pendingLink&&<button onClick={()=>setMeasureOpen(false)}>Fermer</button>}</div><a href="https://tv.muzcast.co/confidentialite/" target="_blank" rel="noreferrer">Confidentialité ↗</a></section>}
+
       <dialog ref={about} className="mz-about" aria-labelledby="about-title">
         <form method="dialog"><button aria-label="Fermer À propos">Fermer ×</button></form>
         <span className="mz-eyebrow">À PROPOS</span>
         <h2 id="about-title">Muzcast à la maison</h2>
-        <p>Version {version} · Votre univers Muzcast sur grand écran.</p>
+        <button onClick={()=>setMeasureOpen(true)}>Mesure d’usage</button><p>Version {version} · Votre univers Muzcast sur grand écran.</p>
         <p>Fondé sur <a href="https://github.com/wingedpanther/cleanmytv" target="_blank" rel="noreferrer">CleanMyTV</a>, sous licence MIT. Les profils communautaires de nettoyage proviennent de CleanYourTV.</p>
         <details><summary>Crédits et licence MIT</summary><pre>{license}</pre></details>
         <p><a href="https://github.com/haszz/muzcast-setup" target="_blank" rel="noreferrer">Code source du projet ↗</a></p>
@@ -185,7 +191,7 @@ export default function App() {
           {connected
             ? status.probe?.model || 'TV connectée'
             : 'En attente de votre TV'}
-          <a
+          <button onClick={()=>setMeasureOpen(true)}>Mesure d’usage</button><a
             href="https://tv.muzcast.co/installer/"
             target="_blank"
             rel="noreferrer"

@@ -12,7 +12,7 @@ try{
  let ready=false;
  for(let i=0;i<300;i++){
   if(child.exitCode!==null||child.signalCode)throw Error(`Native process exited: ${child.exitCode??child.signalCode}\n${logs}`);
-  try{const r=await fetch(`http://127.0.0.1:${port}/json/version`);if(r.ok){ready=true;break}}catch{}
+  try{const r=await fetch(`http://127.0.0.1:${port}/json/version`,{signal:AbortSignal.timeout(1000)});if(r.ok){ready=true;break}}catch{}
   await delay(200);
  }
  if(!ready)throw Error('Native renderer did not start after 60s\n'+logs);
@@ -22,6 +22,7 @@ try{
  const bridge=await page.evaluate(async()=>({platform:window.cytv.platform,state:(await window.cytv.status()).state,desktop:navigator.userAgent.includes('Electron')}));
  if(bridge.platform!=='darwin'||!bridge.desktop)throw Error('Not the real native bridge');
  if(await page.getByText('Aperçu de l’interface · TV simulée, aucune installation réelle').count())throw Error('Mock running in desktop');
+ if(await page.getByRole('button',{name:'Refuser',exact:true}).isVisible())await page.getByRole('button',{name:'Refuser',exact:true}).click();
  await page.getByRole('button',{name:'À propos',exact:true}).click();
  await page.getByRole('dialog').waitFor({state:'visible'});
  await page.getByRole('button',{name:'Fermer À propos'}).click();
@@ -31,4 +32,4 @@ try{
  if(child.exitCode!==null||child.signalCode)throw Error('Process stopped during UI check');
  await page.screenshot({path:'/tmp/muzcast-native-release.png'});
  console.log('Native startup, real bridge, About dialog and manual connection UI: PASS');
-}finally{await browser?.close();child.kill('SIGTERM')}
+}finally{await browser?.close();child.kill('SIGTERM');setTimeout(()=>child.kill('SIGKILL'),2000).unref()}

@@ -63,3 +63,9 @@ Captures de l’interface avec une TV simulée. La validation réelle du téléc
 ### Distribution Windows 0.1.1
 
 Paquet NSIS x64 pour Windows 10/11 Intel/AMD : `Muzcast-Setup-0.1.1.exe`. Installation assistée par utilisateur, avec choix du dossier. Non signé Authenticode. Compilé depuis macOS ; structure PE x64 et contenu vérifiés, mais lancement/installation sur PC Windows réel non encore validés. Pas de paquet ARM64 ou 32 bits. Le guide publié explique SmartScreen et le réseau privé sans désactiver les protections.
+
+### Mesure d’usage et liaison au site (0.1.2)
+
+Consentement explicite dans « Mesure d’usage », modifiable ensuite. Identifiants aléatoires, aucun compte ni adresse de TV dans PostHog. Le même identifiant relie site et assistant seulement après confirmation. Windows conserve `$EXEFILE` via NSIS. Mac examine uniquement les noms de DMG Muzcast 0.1.2 dans Téléchargements ; plusieurs identités candidates ou accès refusé annulent la détection. Expiration 30 jours. Secours par protocole `muzcastsetup://link?code=MTV1.UUID.TIMESTAMP` ou code collé. Un lien n’effectue jamais d’installation ni d’action sur la TV.
+
+Événements natifs : ouverture, liaison, début/résultat/durée de connexion, association, installation, nettoyage/restauration et ouverture d’app. `app_installed` est émis seulement après vérification du versionCode via ADB. Aucun suivi sans accord ; la révocation change l’identifiant. Les tests utilisent `is_test=true` et sont exclus du dashboard.

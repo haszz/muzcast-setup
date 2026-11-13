@@ -137,6 +137,8 @@ export function installMock(): void {
 
   const api: CytvApi = {
     platform: 'darwin',
+    telemetryStatus: async()=>({enabled:false,pendingLink:false,linked:false}),
+    telemetryPreference: async(enabled)=>({enabled,pendingLink:false,linked:false}),
     installMuzcast: async () => { await wait(1000); return { version: 'Démonstration' } },
     openMuzcast: async () => {},
     async scan() {

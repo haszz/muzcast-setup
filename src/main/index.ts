@@ -1,3 +1,4 @@
+import * as telemetry from './telemetry'
 import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -82,6 +83,8 @@ async function checks(): Promise<CheckItem[]> {
 type Handlers = { [K in keyof CytvApi as CytvApi[K] extends (...a: never[]) => Promise<unknown> ? K : never]: CytvApi[K] }
 
 const handlers: Omit<Handlers, 'onLog' | 'onProgress' | 'onStatus'> = {
+  telemetryStatus: async () => telemetry.status(),
+  telemetryPreference: async (enabled,code) => telemetry.preference(enabled,code),
   installMuzcast: (product) => muzcast.install(product),
   openMuzcast: (product) => muzcast.open(product),
   scan: () => scan(),
@@ -231,7 +234,9 @@ function createWindow(): void {
 // One copy at a time: two would race on the key file and on the same TV connection.
 const primary = app.requestSingleInstanceLock()
 if (!primary) app.quit()
-app.on('second-instance', () => {
+app.on('open-url', (event,url) => {event.preventDefault();telemetry.receive(url);win?.focus()})
+app.on('second-instance', (_event,argv) => {
+  for(const arg of argv)if(arg.startsWith('muzcastsetup:'))telemetry.receive(arg)
   if (win) { if (win.isMinimized()) win.restore(); win.focus() }
 })
 
@@ -241,13 +246,16 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false))
   // Packaged: lists and the APK sit in Contents/Resources (mac) or resources\ (Windows).
   configurePaths(app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources'), app.getPath('userData'))
+  telemetry.init()
+  for(const arg of process.argv)if(arg.startsWith('muzcastsetup:'))telemetry.receive(arg)
+  if(app.isPackaged)app.setAsDefaultProtocolClient('muzcastsetup')
   setSinks((line) => send('log', line), (p) => send('progress', p))
   T.init(paths.adbKey, (s: ConnStatus) => send('status', s))
   for (const [name, fn] of Object.entries(handlers)) {
     ipcMain.handle(name, async (e, ...args: unknown[]) => {
       if (!isAppUrl(e.senderFrame?.url)) throw new Error('blocked: this request did not come from the app window')
       try {
-        return await (fn as (...a: unknown[]) => Promise<unknown>)(...args)
+        return await telemetry.operation(name,args,()=> (fn as (...a: unknown[]) => Promise<unknown>)(...args))
       } catch (e) {
         log(name, 'error', (e as Error).message)
         throw e
@@ -262,3 +270,6 @@ app.on('window-all-closed', () => {
   T.disconnect()
   if (process.platform !== 'darwin') app.quit()
 })
+
+let exiting=false
+app.on("before-quit",event=>{if(exiting)return;event.preventDefault();exiting=true;void telemetry.flush().finally(()=>app.quit())})

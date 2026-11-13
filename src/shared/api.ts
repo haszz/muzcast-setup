@@ -413,6 +413,9 @@ export interface WebResponse {
 }
 
 export interface CytvApi {
+  telemetryStatus(): Promise<{enabled:boolean|null;pendingLink:boolean;linked:boolean}>
+  telemetryPreference(enabled:boolean,code?:string): Promise<{enabled:boolean|null;pendingLink:boolean;linked:boolean}>
+
   installMuzcast(product: 'launcher' | 'muzcast'): Promise<{ version: string }>
   openMuzcast(product: 'launcher' | 'muzcast'): Promise<void>
   platform: 'darwin' | 'win32' | 'linux'
