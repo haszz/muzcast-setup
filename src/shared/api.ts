@@ -406,7 +406,7 @@ export interface DownloadProgress {
   tool: ToolId | 'sideload'
   received: number
   total: number
-  phase: 'download' | 'extract' | 'install' | 'done' | 'error'
+  phase: 'download' | 'extract' | 'transfer' | 'verify' | 'install' | 'done' | 'error'
   message?: string
 }
 

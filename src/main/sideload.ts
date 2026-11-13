@@ -67,7 +67,12 @@ export async function install(path: string): Promise<ApplyResult> {
   if (free < need) throw new Error(`The TV needs about ${Math.round(need / 1024)} MB free to install this, and has ${Math.round(free / 1024)} MB. TV extras → Storage can clear app caches.`)
   log(TASK, 'cmd', `install ${basename(path)} (${name})`)
   try {
-    await T.pushB64(TASK, data, TMP, (i, n) => progress({ tool: 'sideload', received: i, total: n, phase: 'install' }))
+    await T.tv().push(data, TMP, (received,total) => progress({tool:'sideload',received,total,phase:'transfer',message:'Envoi direct du fichier à votre TV'}))
+    progress({tool:'sideload',received:0,total:0,phase:'verify',message:'Vérification du fichier reçu par votre TV'})
+    const { createHash } = await import('node:crypto')
+    const checksum = (await T.tv().shell(`sha256sum ${TMP}`,120000)).trim().split(/\s+/)[0]
+    if(checksum!==createHash('sha256').update(data).digest('hex'))throw Error('Le fichier reçu par la TV est incomplet. Réessayez l’installation.')
+    progress({ tool: "sideload", received: 0, total: 0, phase: "install", message: "Android installe l’application. Cette étape peut prendre quelques minutes." })
     const out = await T.sh(TASK, `pm install -r ${TMP}`, { timeoutMs: 300000 })
     progress({ tool: 'sideload', received: 1, total: 1, phase: 'done' })
     if (/Success/.test(out)) return { ok: true, summary: `Installed ${name}. It's in Home's app list now.`, warnings: [] }

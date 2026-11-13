@@ -13,6 +13,7 @@ import logo from './assets/logo.svg'
 import launcher from './assets/launcher.webp'
 import accueil from './assets/accueil.webp'
 import './muzcast.css'
+import {InstallExperience} from './components/InstallExperience'
 // Kept for the upstream screens, which remain available to maintainers.
 export type StepId =
   | 'guided'
@@ -118,7 +119,7 @@ export default function App() {
     try {
       await action()
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError((e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']+': (?:Error: )?/, ''))
     } finally {
       setBusy(false)
     }
@@ -218,7 +219,7 @@ export default function App() {
             {
               [
                 'Installons Muzcast sur votre TV.',
-                'Deux apps. Un même univers.',
+                active ? 'Votre TV se prépare.' : 'Deux apps. Un même univers.',
                 'Faites de la place à l’essentiel.',
                 'Votre TV, à votre image.',
               ][step]
@@ -228,7 +229,7 @@ export default function App() {
             {
               [
                 'Quelques minutes pour réunir vos récits, vos prières et vos applications préférées.',
-                'Le pack complet est sélectionné. Vous pouvez aussi choisir une seule application.',
+                active ? 'Suivez l’installation et découvrez votre nouvel univers Muzcast.' : 'Le pack complet est sélectionné. Vous pouvez aussi choisir une seule application.',
                 'Une étape utile pour réduire les applications inutiles, à votre rythme.',
                 'Retrouvez Muzcast dans les applications de votre téléviseur.',
               ][step]
@@ -415,7 +416,7 @@ export default function App() {
         )}
         {step === 1 && (
           <>
-            <div className="mz-products">
+            {active ? <InstallExperience name={products.find(p=>p.id===active)!.name} progress={progress} completed={selected.filter(p=>installed[p]).length} total={selected.length}/> : <div className="mz-products">
               {products.map((p) => (
                 <label
                   className={
@@ -450,32 +451,11 @@ export default function App() {
                   </div>
                 </label>
               ))}
-            </div>
-            <div className="mz-action">
+            </div>}
+            {!active && <div className="mz-action">
               <div>
-                <strong>
-                  {active
-                    ? `Installation de ${products.find((p) => p.id === active)?.name}`
-                    : 'Le pack complet, simplement'}
-                </strong>
-                <p>
-                  {active
-                    ? progress?.phase === 'download'
-                      ? 'Téléchargement de la version officielle…'
-                      : 'Transfert et installation sur votre TV…'
-                    : 'Vos applications actuelles restent en place. Les fichiers sont vérifiés avant installation.'}
-                </p>
-                {active && (
-                  <progress
-                    aria-label="Installation"
-                    value={
-                      progress?.total
-                        ? progress.received / progress.total
-                        : undefined
-                    }
-                    max="1"
-                  />
-                )}
+                <strong>Le pack complet, simplement</strong>
+                <p>Vos applications actuelles restent en place. Les fichiers sont vérifiés avant installation.</p>
               </div>
               <button
                 className="mz-primary"
@@ -488,7 +468,7 @@ export default function App() {
                     ? 'Continuer →'
                     : `Installer ${selected.length === 2 ? 'les deux apps' : 'l’application'} →`}
               </button>
-            </div>
+            </div>}
           </>
         )}
         {step === 2 && (
@@ -504,21 +484,29 @@ export default function App() {
             <span className="mz-eyebrow">BIENVENUE CHEZ VOUS</span>
             <h2>À vous le grand écran.</h2>
             <p>
-              Ouvrez vos applications depuis la télécommande. Pour retrouver
-              Muzcast TV avec le bouton Accueil, choisissez-le dans les
-              paramètres des applications par défaut, si votre TV le permet.
+              Cliquez ci-dessous pour ouvrir une app directement sur votre TV.
+              Avec la télécommande, appuyez sur Accueil, puis ouvrez Applications
+              (ou « Voir toutes les applications », selon votre téléviseur).
             </p>
-            <div className="mz-form">
+            <div className="mz-finish-apps">
               {products.map((p) => (
-                <button
-                  disabled={busy}
-                  key={p.id}
-                  className={p.id === 'launcher' ? 'mz-primary' : ''}
-                  onClick={() => void run(() => window.cytv.openMuzcast(p.id))}
-                >
-                  Ouvrir {p.name} ↗
-                </button>
+                <article className="mz-finish-app" key={p.id}>
+                  <img src={p.image} alt={p.id === 'launcher' ? 'L’accueil Muzcast TV avec les applications et les horaires de prière' : 'Le catalogue audio Muzcast'} />
+                  <div>
+                    <h3>{p.name}</h3>
+                    <p>{p.role}</p>
+                    <p>{p.id === 'launcher' ? 'Cherchez « Muzcast TV ». Sur une ancienne version, le nom affiché peut encore être « Accueil ».' : 'Cherchez « Muzcast » pour écouter vos albums et vos épisodes.'}</p>
+                    <button disabled={busy} className={p.id === 'launcher' ? 'mz-primary' : ''}
+                      onClick={() => void run(() => window.cytv.openMuzcast(p.id))}>
+                      <Icon name="play" /> Ouvrir {p.name} sur la TV
+                    </button>
+                  </div>
+                </article>
               ))}
+            </div>
+            <div className="mz-note">
+              <b>Retrouver Muzcast TV avec le bouton Accueil</b>
+              <p>Dans les paramètres de votre TV, ouvrez Applications → Applications par défaut → Application d’accueil, puis choisissez Muzcast TV, si ce réglage est proposé. Les intitulés varient selon le téléviseur.</p>
             </div>
             <div className="mz-note">
               <b>Une dernière chose</b>

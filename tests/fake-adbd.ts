@@ -67,6 +67,8 @@ export interface FakeTv {
   /** Packages that never stay running (pidof finds nothing), like a launcher crashing at boot. */
   crashing?: string[]
   /** Misbehaviour for client hardening tests. */
+  syncFailure?: string
+  syncDisconnect?: boolean
   tokenSize?: number
   sendMalformed?: 'oversize' | 'magic'
 }
@@ -188,6 +190,7 @@ export function startFakeAdbd(tv: FakeTv, listenPort = 0): Promise<{ server: Ser
     const server = createServer((sock: Socket) => {
       let buf = Buffer.alloc(0)
       let token = randomBytes(20)
+      const uploads = new Map<number,{remote:number,path:string,chunks:Buffer[]}>()
       let nextRemote = 100
       const banner = Buffer.from('device::ro.product.name=BRAVIA_VH2_EU;ro.product.model=BRAVIA 4K VH2;ro.product.device=BRAVIA_VH2;\0')
       sock.on('data', (chunk: Buffer) => {
@@ -219,9 +222,28 @@ export function startFakeAdbd(tv: FakeTv, listenPort = 0): Promise<{ server: Ser
             const local = a0, remote = nextRemote++
             const service = data.toString().replace(/\0$/, '')
             sock.write(packet(A_OKAY, remote, local))
+            if(service==='sync:'){uploads.set(local,{remote,path:'',chunks:[]});continue}
             const out = Buffer.from(service.startsWith('shell:') ? sh(tv, service.slice(6)) : '')
             for (let i = 0; i < out.length; i += tv.maxData) sock.write(packet(A_WRTE, remote, local, out.subarray(i, i + tv.maxData)))
             sock.write(packet(A_CLSE, remote, local))
+          } else if (cmd===A_WRTE && uploads.has(a0)) {
+            const upload=uploads.get(a0)!
+            if(data.length>tv.maxData){sock.destroy();return}
+            const id=data.toString('ascii',0,4),size=data.readUInt32LE(4)
+            if(id==='SEND')upload.path=data.toString('utf8',8,8+size).split(',')[0]
+            if(id==='DATA'){
+              if(size>65536||size!==data.length-8){sock.destroy();return}
+              upload.chunks.push(Buffer.from(data.subarray(8)))
+              if(tv.syncDisconnect){sock.destroy();return}
+            }
+            sock.write(packet(A_OKAY,upload.remote,a0))
+            if(id==='DONE'){
+              const error=Buffer.from(tv.syncFailure??'');const answer=Buffer.alloc(8+error.length)
+              answer.write(error.length?'FAIL':'OKAY');answer.writeUInt32LE(error.length,4);error.copy(answer,8)
+              if(!error.length)tv.files.set(upload.path,Buffer.concat(upload.chunks))
+              sock.write(packet(A_WRTE,upload.remote,a0,answer.subarray(0,4)))
+              sock.write(packet(A_WRTE,upload.remote,a0,answer.subarray(4)))
+            }
           } else if (cmd === A_OKAY || cmd === A_CLSE) {
             // acknowledgements; nothing to do
           }

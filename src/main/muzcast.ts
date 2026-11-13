@@ -34,7 +34,8 @@ export async function install(product: Product): Promise<{ version: string }> {
         (await download(PRODUCTS[product].manifest, 1024 * 1024)).toString(),
       ),
     )
-    const data = await download(m.url)
+    const data = await download(m.url, undefined, undefined, (received,total) => progress({tool:"sideload",received,total,phase:"download",message:"Téléchargement de la version officielle"}))
+    progress({tool:"sideload",received:0,total:0,phase:"verify",message:"Vérification de l’intégrité et de la version du fichier"})
     verifyApk(product, data, m)
     if (
       T.getStatus().host !== status.host ||
@@ -46,6 +47,7 @@ export async function install(product: Product): Promise<{ version: string }> {
     await writeFile(file, data)
     const result = await sideload.install(file)
     if (!result.ok) throw Error([result.summary, ...result.warnings].join(' '))
+    progress({tool:"sideload",received:0,total:0,phase:"verify",message:"Confirmation de la version installée sur votre TV"})
     const installed = await T.tv().shell(
       `dumpsys package ${PRODUCTS[product].package}`,
     )
@@ -62,11 +64,19 @@ export async function install(product: Product): Promise<{ version: string }> {
 export async function open(product: Product): Promise<void> {
   if (!Object.hasOwn(PRODUCTS, product) || busy)
     throw Error('Action indisponible.')
-  const result = await T.tv().shell(
-    `monkey -p ${PRODUCTS[product].package} -c android.intent.category.LAUNCHER 1`,
+  const app = PRODUCTS[product]
+  const category = 'android.intent.category.LEANBACK_LAUNCHER'
+  const resolved = await T.tv().shell(
+    `cmd package resolve-activity --brief -a android.intent.action.MAIN -c ${category} ${app.package}`,
   )
-  if (/No activities|aborted|Error/i.test(result))
-    throw Error(
-      'Impossible d’ouvrir l’application. Ouvrez-la avec la télécommande.',
-    )
+  const component = resolved.trim().split(/\s+/).find(value =>
+    value.startsWith(`${app.package}/`) && /^[a-zA-Z0-9_.$/]+$/.test(value),
+  )
+  if (!component)
+    throw Error(`${app.name} n’est pas disponible sur la TV. Revenez à « Installer Muzcast » pour vérifier son installation.`)
+  const result = await T.tv().shell(
+    `am start -W -a android.intent.action.MAIN -c ${category} -n ${component}`,
+  )
+  if (/Error|Exception|unable|not found/i.test(result) || !/Status:\s*ok/i.test(result))
+    throw Error(`Impossible d’ouvrir ${app.name}. Sur la TV, ouvrez Applications → ${app.name}. Pour une ancienne version du launcher, cherchez aussi « Accueil ».`)
 }

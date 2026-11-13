@@ -139,7 +139,15 @@ export function installMock(): void {
     platform: 'darwin',
     telemetryStatus: async()=>({enabled:false,pendingLink:false,linked:false}),
     telemetryPreference: async(enabled)=>({enabled,pendingLink:false,linked:false}),
-    installMuzcast: async () => { await wait(1000); return { version: 'Démonstration' } },
+    installMuzcast: async () => {
+      for(const phase of ['download','transfer','verify','install'] as const){
+        for(let i=0;i<=20;i++){
+          progress.forEach(cb=>cb({tool:'sideload',phase,received:i*1048576,total:phase==='download'||phase==='transfer'?20*1048576:0,message:phase==='transfer'?'Envoi du fichier à votre TV (démonstration)':phase==='download'?'Téléchargement de la version officielle (démonstration)':'Préparation sur la TV (démonstration)'}));
+          await wait(700)
+        }
+      }
+      return {version:'Démonstration'}
+    },
     openMuzcast: async () => {},
     async scan() {
       await wait(1200)

@@ -78,6 +78,19 @@ describe('Muzcast official releases', () => {
       ),
     ).rejects.toThrow('503')
   })
+  it('reports actual streamed bytes with known and unknown lengths', async () => {
+    for (const known of [true, false]) {
+      const updates: number[][] = []
+      const stream = new ReadableStream<Uint8Array>({start(controller) {
+        controller.enqueue(new Uint8Array([1,2]));controller.enqueue(new Uint8Array([3,4,5]));controller.close()
+      }})
+      const result = await download('https://www.muzcast.co/a', 100,
+        (async () => new Response(stream, {headers: known ? {'content-length':'5'} : {}})) as typeof fetch,
+        (received,total) => updates.push([received,total]))
+      expect(result.length).toBe(5)
+      expect(updates).toEqual([[2,known?5:0],[5,known?5:0]])
+    }
+  })
   it('rejects a corrupted APK', () =>
     expect(() =>
       verifyApk('launcher', Buffer.from('broken'), {

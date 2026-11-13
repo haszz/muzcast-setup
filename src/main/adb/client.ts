@@ -67,6 +67,8 @@ interface Stream {
   bytes: number
   opened: (remoteId: number) => void
   closed: () => void
+  acknowledged?: () => void
+  received?: (data: Buffer) => void
 }
 
 export interface ConnectOptions {
@@ -227,9 +229,10 @@ export class AdbClient {
       const s = this.streams.get(p.arg1)
       if (s) {
         if (p.cmd === A_OKAY) {
-          if (!s.remoteId) { s.remoteId = p.arg0; s.opened(p.arg0) }
+          if (!s.remoteId) { s.remoteId = p.arg0; s.opened(p.arg0) } else { s.acknowledged?.() }
         } else if (p.cmd === A_WRTE) {
           if (!s.remoteId) return // adbd answers OPEN with OKAY before any data; ignore out-of-order writes
+          if (s.received) { this.send(A_OKAY, s.localId, s.remoteId); s.received(p.data); return }
           s.chunks.push(p.data)
           s.bytes += p.data.length
           if (s.bytes > MAX_STREAM_BYTES) {
@@ -304,6 +307,53 @@ export class AdbClient {
     const next = this.queue.then(run, run)
     this.queue = next.catch(() => undefined)
     return next
+  }
+
+  /** ADB sync v1: binary streaming, no shell/base64 conversion or per-block process. */
+  push(data: Buffer, remote: string, onProgress?: (sent: number, total: number) => void, idleTimeoutMs = 60000): Promise<void> {
+    const run = (): Promise<void> => new Promise((resolve,reject) => {
+      if (this.closedError) return reject(this.closedError)
+      if (!remote.startsWith('/data/local/tmp/') || /[\0,\r\n]/.test(remote)) return reject(new AdbError('Invalid upload path.', 'protocol'))
+      const destination = Buffer.from(remote + ',33188')
+      if(destination.length+8>this.maxData)return reject(new AdbError('Upload path too long.', 'protocol'))
+      const frame = (id: string, value: number, payload: Buffer=Buffer.alloc(0)): Buffer => {
+        const header=Buffer.alloc(8);header.write(id,0,4,'ascii');header.writeUInt32LE(value>>>0,4);return Buffer.concat([header,payload])
+      }
+      const localId=this.nextId++
+      let finished=false, stage=0, offset=0, acknowledged=0, inFlightBytes=0, response=Buffer.alloc(0)
+      let timer: ReturnType<typeof setTimeout>
+      const finish=(error?: Error): void => {
+        if(finished)return
+        finished=true;clearTimeout(timer);this.streams.delete(localId)
+        if(stream.remoteId&&!this.closedError)this.send(A_CLSE,localId,stream.remoteId)
+        error?reject(error):resolve()
+      }
+      const refresh=():void=>{clearTimeout(timer);timer=setTimeout(()=>finish(new AdbError('Le transfert vers la TV ne répond plus. Vérifiez la connexion puis réessayez.', 'timeout')),idleTimeoutMs)}
+      const next=():void=>{
+        if(finished)return
+        refresh()
+        if(inFlightBytes){acknowledged+=inFlightBytes;inFlightBytes=0;onProgress?.(acknowledged,data.length)}
+        if(stage===0){stage=1;this.send(A_WRTE,localId,stream.remoteId,frame('SEND',destination.length,destination));return}
+        if(offset<data.length){
+          const part=data.subarray(offset,Math.min(data.length,offset+Math.min(65536,this.maxData-8)))
+          offset+=part.length;inFlightBytes=part.length
+          this.send(A_WRTE,localId,stream.remoteId,frame('DATA',part.length,part));return
+        }
+        if(stage===1){stage=2;this.send(A_WRTE,localId,stream.remoteId,frame('DONE',Math.floor(Date.now()/1000)))}
+      }
+      const stream: Stream={localId,remoteId:0,chunks:[],bytes:0,opened:next,acknowledged:next,
+        closed:()=>finish(this.closedError??new AdbError('La TV a interrompu le transfert avant sa confirmation.', 'closed')),
+        received:chunk=>{
+          refresh();response=Buffer.concat([response,chunk])
+          if(response.length<8)return
+          const id=response.toString('ascii',0,4),length=response.readUInt32LE(4)
+          if(id==='OKAY'&&stage===2){finish();return}
+          if(id==='FAIL'&&length<=65536){if(response.length>=8+length)finish(new AdbError('La TV a refusé le fichier : '+response.toString('utf8',8,8+length),'protocol'));return}
+          finish(new AdbError('Réponse inattendue pendant le transfert vers la TV.', 'protocol'))
+        }}
+      this.streams.set(localId,stream);refresh();this.send(A_OPEN,localId,0,Buffer.from('sync:\0'))
+    })
+    const next=this.queue.then(run,run);this.queue=next.catch(()=>undefined);return next
   }
 
   async shell(command: string, timeoutMs?: number): Promise<string> {

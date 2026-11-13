@@ -171,7 +171,7 @@ export async function batch(task: string, commands: string[]): Promise<string[]>
  * Upload a file as base64 chunks through plain shell commands, then check the MD5 on the TV
  * (upstream tools/b64push.py: large ADB sync pushes hang on some TVs).
  */
-export async function pushB64(task: string, data: Buffer, remote: string, onChunk?: (i: number, n: number) => void): Promise<void> {
+export async function pushB64(task: string, data: Buffer, remote: string, onChunk?: (i: number, n: number) => void, onVerifying?: () => void): Promise<void> {
   const c = tv()
   const want = createHash('md5').update(data).digest('hex')
   // base64 of the chunk plus the echo must fit one payload; a multiple of 3 keeps '=' padding out of
@@ -190,6 +190,7 @@ export async function pushB64(task: string, data: Buffer, remote: string, onChun
     if (!out.includes(`ok${i}`)) throw new Error(`upload chunk ${i + 1} of ${n} failed: ${out.trim()}`)
     onChunk?.(i + 1, n)
   }
+  onVerifying?.()
   const out = await c.shell(`base64 -d ${tmp} > ${remote} && rm ${tmp} && md5sum ${remote}`, 120000)
   const got = out.trim().split(/\s+/)[0] ?? ''
   if (got !== want) throw new Error(`upload of ${remote} is damaged (md5 ${got || 'missing'}, expected ${want}).`)

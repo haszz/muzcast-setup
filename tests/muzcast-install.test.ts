@@ -22,7 +22,7 @@ vi.mock('../src/main/muzcast-release', () => ({
   release: () => ({ url: 'apk', name: '1.0', versionCode: 29 }),
   verifyApk: mock.verify,
 }))
-import { install } from '../src/main/muzcast'
+import { install, open } from '../src/main/muzcast'
 beforeEach(() => {
   vi.resetAllMocks()
   mock.status.state = 'connected'
@@ -53,4 +53,19 @@ it('keeps installation failures visible and allows a retry', async () => {
   })
   await expect(install('muzcast')).rejects.toThrow('Stockage insuffisant')
   await expect(install('muzcast')).resolves.toEqual({ version: '1.0' })
+})
+
+it('opens the resolved TV activity, not the phone launcher category', async () => {
+  mock.shell.mockResolvedValueOnce('co.muzcast.tv/.TvActivity').mockResolvedValueOnce('Status: ok\nActivity: co.muzcast.tv/.TvActivity')
+  await expect(open('muzcast')).resolves.toBeUndefined()
+  expect(mock.shell).toHaveBeenLastCalledWith('am start -W -a android.intent.action.MAIN -c android.intent.category.LEANBACK_LAUNCHER -n co.muzcast.tv/.TvActivity')
+})
+it('explains an absent app without attempting to launch it', async () => {
+  mock.shell.mockResolvedValueOnce('No activity found')
+  await expect(open('muzcast')).rejects.toThrow('Installer Muzcast')
+  expect(mock.shell).toHaveBeenCalledTimes(1)
+})
+it('does not claim that a rejected TV launch succeeded', async () => {
+  mock.shell.mockResolvedValueOnce('co.muzcast.tv/.TvActivity').mockResolvedValueOnce('Error: Permission Denial')
+  await expect(open('muzcast')).rejects.toThrow('Applications → Muzcast')
 })

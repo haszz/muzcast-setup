@@ -34,6 +34,7 @@ export async function download(
   url: string,
   limit = MAX,
   fetcher: typeof fetch = fetch,
+  onProgress?: (received: number, total: number) => void,
 ): Promise<Buffer> {
   let u = allowedUrl(url)
   for (let i = 0; i < 5; i++) {
@@ -60,6 +61,7 @@ export async function download(
         size += value.length
         if (size > limit) throw Error('Fichier trop volumineux.')
         chunks.push(value)
+        onProgress?.(size, Number(r.headers.get("content-length")) || 0)
       }
     } finally {
       await reader.cancel()
