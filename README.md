@@ -59,3 +59,7 @@ Captures de l’interface avec une TV simulée. La validation réelle du téléc
 ## Compilation automatisée
 
 `docs/muzcast/build-workflow.yml` contient le workflow adapté à Muzcast (sans recompiler le launcher de CleanMyTV). Le copier vers `.github/workflows/build.yml` avec un accès GitHub autorisé à modifier les workflows avant d’activer Actions. Le workflow upstream n’est pas utilisé pour distribuer cette version.
+
+### Distribution Windows 0.1.1
+
+Paquet NSIS x64 pour Windows 10/11 Intel/AMD : `Muzcast-Setup-0.1.1.exe`. Installation assistée par utilisateur, avec choix du dossier. Non signé Authenticode. Compilé depuis macOS ; structure PE x64 et contenu vérifiés, mais lancement/installation sur PC Windows réel non encore validés. Pas de paquet ARM64 ou 32 bits. Le guide publié explique SmartScreen et le réseau privé sans désactiver les protections.
