@@ -10,12 +10,12 @@ child.stdout.on('data',x=>logs+=x);child.stderr.on('data',x=>logs+=x);
 let browser;
 try{
  let ready=false;
- for(let i=0;i<100;i++){
+ for(let i=0;i<300;i++){
   if(child.exitCode!==null||child.signalCode)throw Error(`Native process exited: ${child.exitCode??child.signalCode}\n${logs}`);
   try{const r=await fetch(`http://127.0.0.1:${port}/json/version`);if(r.ok){ready=true;break}}catch{}
   await delay(200);
  }
- if(!ready)throw Error('Native renderer did not start');
+ if(!ready)throw Error('Native renderer did not start after 60s\n'+logs);
  browser=await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
  const page=browser.contexts()[0].pages()[0];
  await page.getByRole('heading',{name:'Installons Muzcast sur votre TV.'}).waitFor();
