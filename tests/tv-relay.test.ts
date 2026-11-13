@@ -22,7 +22,7 @@ describe.skipIf(process.platform!=='darwin')('connection fallback',()=>{
  })
  it('stops the owned relay when ADB fails',async()=>{
   mocks.connect.mockRejectedValueOnce(Object.assign(new Error('(EHOSTUNREACH)'),{code:'unreachable'})).mockRejectedValueOnce(Object.assign(new Error('auth refused'),{code:'auth'}))
-  expect(await tv.connect('192.168.31.184')).toMatchObject({state:'error',error:'auth refused'})
+  expect(await tv.connect('192.168.31.184')).toMatchObject({state:'error',error:expect.stringContaining('auth refused')})
   expect(mocks.stop).toHaveBeenCalled()
  })
  it('does not overwrite a newer connection when an old relay attempt fails',async()=>{

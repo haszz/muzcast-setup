@@ -53,8 +53,8 @@ const labels = [
   'Alléger ma TV',
   'En profiter',
 ]
-function Icon({name}:{name:'tv'|'download'|'sparkles'|'play'|'wifi'|'check'|'shield'}) {
- const paths={tv:<><rect x="3" y="4" width="18" height="13" rx="3"/><path d="M8 21h8M12 17v4"/></>,download:<><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></>,sparkles:<><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/></>,play:<path d="m8 5 11 7-11 7Z"/>,wifi:<><path d="M3 8a15 15 0 0 1 18 0M6 12a10 10 0 0 1 12 0m-9 4a5 5 0 0 1 6 0"/><circle cx="12" cy="20" r=".6"/></>,check:<path d="m5 12 4 4L19 6"/>,shield:<><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Z"/><path d="m8 12 3 3 5-6"/></>}
+function Icon({name}:{name:'tv'|'download'|'sparkles'|'play'|'wifi'|'check'|'shield'|'help'|'info'|'arrow'}) {
+ const paths={help:<><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4M12 16.5v.1"/></>,info:<><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v.1"/></>,arrow:<path d="M7 17 17 7M7 7h10v10"/>,tv:<><rect x="3" y="4" width="18" height="13" rx="3"/><path d="M8 21h8M12 17v4"/></>,download:<><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></>,sparkles:<><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/></>,play:<path d="m8 5 11 7-11 7Z"/>,wifi:<><path d="M3 8a15 15 0 0 1 18 0M6 12a10 10 0 0 1 12 0m-9 4a5 5 0 0 1 6 0"/><circle cx="12" cy="20" r=".6"/></>,check:<path d="m5 12 4 4L19 6"/>,shield:<><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Z"/><path d="m8 12 3 3 5-6"/></>}
  return <svg className="mz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
 }
 export default function App() {
@@ -153,7 +153,7 @@ export default function App() {
         <form method="dialog"><button aria-label="Fermer À propos">Fermer ×</button></form>
         <span className="mz-eyebrow">À PROPOS</span>
         <h2 id="about-title">Muzcast à la maison</h2>
-        <button onClick={()=>setMeasureOpen(true)}>Mesure d’usage</button><p>Version {version} · Votre univers Muzcast sur grand écran.</p>
+        <button onClick={()=>{about.current?.close();setMeasureOpen(true)}}>Mesure d’usage</button><p>Version {version} · Votre univers Muzcast sur grand écran.</p>
         <p>Fondé sur <a href="https://github.com/wingedpanther/cleanmytv" target="_blank" rel="noreferrer">CleanMyTV</a>, sous licence MIT. Les profils communautaires de nettoyage proviennent de CleanYourTV.</p>
         <details><summary>Crédits et licence MIT</summary><pre>{license}</pre></details>
         <p><a href="https://github.com/haszz/muzcast-setup" target="_blank" rel="noreferrer">Code source du projet ↗</a></p>
@@ -187,18 +187,23 @@ export default function App() {
           ))}
         </nav>
         <div className="mz-sidebar-bottom">
-          <span className={'mz-dot ' + (connected ? 'online' : '')} />
-          {connected
-            ? status.probe?.model || 'TV connectée'
-            : 'En attente de votre TV'}
-          <button onClick={()=>setMeasureOpen(true)}>Mesure d’usage</button><a
-            href="https://tv.muzcast.co/installer/"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Besoin d’un coup de main ↗
-          </a>
-          <button className="mz-about-link" onClick={() => about.current?.showModal()}>À propos</button>
+          <div className={'mz-sidebar-status' + (connected ? ' is-connected' : '')} role="status">
+            <span className="mz-sidebar-status-icon"><Icon name="tv" /></span>
+            <div><strong>{connected ? status.probe?.model || 'TV connectée' : 'Votre télévision'}</strong>
+              <span><i className={'mz-dot ' + (connected ? 'online' : '')} />{connected ? 'Connectée' : 'En attente de connexion'}</span>
+            </div>
+          </div>
+          <div className="mz-sidebar-actions">
+            <a className="mz-sidebar-action mz-help-action" href="https://tv.muzcast.co/installer/" target="_blank" rel="noreferrer">
+              <Icon name="help" /><span>Besoin d’aide ?</span><Icon name="arrow" />
+            </a>
+            <button className="mz-sidebar-action" onClick={()=>setMeasureOpen(true)}>
+              <Icon name="shield" /><span>Mesure d’usage<small>{measurement?.enabled === true ? 'Activée · gérer mon choix' : measurement?.enabled === false ? 'Désactivée · gérer mon choix' : 'À votre choix'}</small></span>
+            </button>
+            <button className="mz-sidebar-action" onClick={() => about.current?.showModal()}>
+              <Icon name="info" /><span>À propos</span><small className="mz-sidebar-version">{version}</small>
+            </button>
+          </div>
         </div>
       </aside>
       <main className="mz-main">

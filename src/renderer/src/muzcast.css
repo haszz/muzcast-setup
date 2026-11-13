@@ -7,3 +7,25 @@
 
 /* Installed-app inventory: actual TV artwork, clear selection, technical details on demand. */
 .mz-apps-toolbar{display:flex;align-items:end;justify-content:space-between;gap:24px;margin:28px 0 18px}.mz-apps-toolbar>div{flex:1}.mz-apps-toolbar p,.mz-app-read-status{font-size:12px;color:var(--muted);margin-top:7px}.mz-apps-toolbar label{width:260px;max-width:100%}.mz-app-filters{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 22px}.mz-app-filters button[aria-pressed=true]{background:var(--accent-soft);color:#a83310}.mz-app-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:20px 0 28px}.mz-app-card{min-width:0;background:#f7f7f3;border-radius:20px;padding:20px;display:flex;flex-direction:column;gap:16px}.mz-app-card.is-selected{background:#fff0e9}.mz-main label.mz-app-card-heading{display:flex;align-items:center;gap:14px;cursor:pointer}.mz-app-art{display:grid;place-items:center;width:60px;height:60px;flex:none;background:white;border-radius:16px;overflow:hidden}.mz-app-art img{display:block;object-fit:contain;padding:3px}.mz-app-art>span{font-size:20px;color:#b63812;font-weight:600}.mz-app-name{flex:1;min-width:0}.mz-app-name b{display:block;font-size:15px;line-height:1.4;overflow-wrap:anywhere}.mz-app-name small{display:block;font-size:11px;font-weight:400;color:var(--muted);margin-top:5px}.mz-app-card>p{font-size:12px;font-weight:400;line-height:1.65;color:#62675e}.mz-app-card details{font-size:11px;color:var(--muted);margin-top:auto}.mz-app-card summary{cursor:pointer;display:list-item;padding:5px 0}.mz-app-card code{display:block;overflow-wrap:anywhere;font-size:10px;background:#ffffffaa;border-radius:8px;padding:10px;margin:8px 0}.mz-community-note{font-size:11px;overflow-wrap:anywhere}.mz-app-selection{font-size:10px;font-weight:550;color:#74796d}.is-selected .mz-app-selection{color:#a4320d}.mz-app-empty{padding:36px 20px;text-align:center;background:#f7f7f3;border-radius:18px;color:var(--muted);font-size:13px}.mz-app-card:focus-within{box-shadow:0 0 0 3px #e6461024}@media(max-width:1000px){.mz-app-grid{grid-template-columns:1fr}.mz-apps-toolbar{align-items:stretch;flex-direction:column}.mz-apps-toolbar label{width:100%}}
+
+/* Sidebar utility area: consistent actions, readable connection state, no native button chrome. */
+.mz-sidebar{overflow-y:auto;scrollbar-width:thin}
+.mz-sidebar-bottom{padding:26px 0 0;font-size:12px}
+.mz-sidebar-status{display:flex;align-items:center;gap:10px;background:#f6f6f1;border-radius:16px;padding:13px 12px;margin-bottom:14px}
+.mz-sidebar-status-icon{display:flex;color:#81877b}
+.mz-sidebar-status>div{min-width:0}
+.mz-sidebar-status strong{display:block;color:var(--foreground);font-size:12px;font-weight:550;line-height:1.4;overflow-wrap:anywhere}
+.mz-sidebar-status div>span{display:flex;align-items:center;font-size:10px;margin-top:5px;line-height:1.5}
+.mz-sidebar-status .mz-dot{flex:none;width:5px;height:5px;margin-right:6px}
+.mz-sidebar-status.is-connected{background:#edf5ef}.is-connected .mz-sidebar-status-icon{color:#49816a}
+.mz-sidebar-actions{display:grid;gap:4px}
+.mz-sidebar-bottom .mz-sidebar-action{display:flex;align-items:center;gap:10px;width:100%;min-height:42px;margin:0;padding:10px 12px;border:0;border-radius:12px;background:transparent;color:var(--muted);text-align:left;font-size:12px;line-height:1.4;transition:background .15s,color .15s}
+.mz-sidebar-action>.mz-icon{width:18px;height:18px}.mz-sidebar-action>span{flex:1;min-width:0}.mz-sidebar-action small{display:block;font-size:10px;line-height:1.45;margin-top:3px;font-weight:400;color:var(--muted)}
+.mz-sidebar-bottom .mz-help-action{color:#bd3609;background:#fff5f0}.mz-help-action>.mz-icon:last-child{width:14px;height:14px}
+.mz-sidebar-bottom .mz-sidebar-action:hover{background:var(--accent-soft);color:#bd3609}
+.mz-sidebar-bottom .mz-sidebar-version{margin:0;font-size:10px;color:#82877c}
+.mz-measure{display:grid;gap:17px;width:min(460px,calc(100vw - 48px));padding:28px}
+.mz-measure h2{font-size:23px;line-height:1.25}.mz-measure p{color:var(--muted);font-size:13px;line-height:1.65}.mz-measure label{font-size:12px;font-weight:550}
+.mz-measure input{border:1px solid #e1e3db;background:var(--background);border-radius:12px;padding:12px;color:var(--foreground);margin:8px 0 0}
+.mz-measure button{border:0;border-radius:24px;background:var(--accent-soft);color:#a8300c;min-height:43px;padding:11px 18px;font-weight:550}
+.mz-measure button:hover{background:#ffe2d6}.mz-measure div{gap:8px}.mz-measure a{font-size:12px}.mz-measure [role=status]:empty{display:none}
