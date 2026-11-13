@@ -31,7 +31,7 @@ const TOKEN_SIZE = 20
 const MAX_STREAM_BYTES = 64 * 1024 * 1024
 
 export class AdbError extends Error {
-  constructor(message: string, readonly code: 'refused' | 'timeout' | 'unreachable' | 'tls' | 'auth' | 'closed' | 'protocol') {
+  constructor(message: string, readonly code: 'refused' | 'timeout' | 'unreachable' | 'tls' | 'auth' | 'auth-interrupted' | 'closed' | 'protocol') {
     super(message)
   }
 }
@@ -80,6 +80,7 @@ export interface ConnectOptions {
   /** How long to wait for the user to press Allow on the TV. */
   handshakeTimeoutMs?: number
   authTimeoutMs?: number
+  signal?: AbortSignal
   /** Called when the TV is showing the "Allow USB debugging?" prompt. */
   onAuthPrompt?: () => void
 }
@@ -100,7 +101,13 @@ export class AdbClient {
 
   static async connect(opts: ConnectOptions): Promise<AdbClient> {
     const client = new AdbClient()
-    try { await client.open(opts) } catch (error) { client.socket?.destroy(); throw error }
+    const abort = (): void => client.close()
+    opts.signal?.addEventListener('abort', abort, {once:true})
+    try {
+      if(opts.signal?.aborted)throw new AdbError('Connexion annulée.', 'closed')
+      await client.open(opts)
+    } catch (error) { client.socket?.destroy(); throw error }
+    finally { opts.signal?.removeEventListener('abort', abort) }
     return client
   }
 
@@ -134,6 +141,7 @@ export class AdbClient {
         else reject(new AdbError(`could not reach ${opts.host}:${port} (${e.code ?? e.message}).`, 'unreachable'))
       })
     })
+    if (opts.signal?.aborted) { this.socket.destroy(); throw new AdbError('Connexion annulée.', 'closed') }
     this.socket.setNoDelay(true)
     this.socket.on('data', (chunk: Buffer) => this.onData(chunk))
     this.socket.on('close', () => this.fail(new AdbError('the TV closed the connection.', 'closed')))
@@ -161,14 +169,18 @@ export class AdbClient {
         this.send(A_AUTH, AUTH_RSAPUBLICKEY, 0, Buffer.from(opts.keys[0].pub + '\0'))
         opts.onAuthPrompt?.()
         try {
-          packet = await this.read(opts.authTimeoutMs ?? 120000)
+          packet = await this.read(opts.authTimeoutMs ?? 180000)
         } catch (e) {
           this.close()
-          throw new AdbError('nobody pressed Allow on the TV in time.', 'auth')
+          if ((e as AdbError).code === 'timeout')
+            throw new AdbError('L’autorisation sur la TV n’a pas été confirmée. Choisissez « Autoriser » sur son écran, puis réessayez.', 'auth')
+          if ((e as AdbError).code === 'closed')
+            throw new AdbError('La TV a interrompu la connexion pendant la demande d’autorisation.', 'auth-interrupted')
+          throw e
         }
       } else {
         this.close()
-        throw new AdbError('the TV rejected the key. Choose Allow on the TV and try again.', 'auth')
+        throw new AdbError('La TV demande à nouveau l’autorisation de cet ordinateur.', 'auth-interrupted')
       }
     }
     if (packet.cmd !== A_CNXN) {

@@ -69,6 +69,8 @@ export interface FakeTv {
   /** Misbehaviour for client hardening tests. */
   syncFailure?: string
   syncDisconnect?: boolean
+  authDisconnects?: number
+  authDelayMs?: number
   tokenSize?: number
   sendMalformed?: 'oversize' | 'magic'
 }
@@ -216,7 +218,11 @@ export function startFakeAdbd(tv: FakeTv, listenPort = 0): Promise<{ server: Ser
             if (ok) sock.write(packet(A_CNXN, 0x01000000, tv.maxData, banner))
             else { token = randomBytes(20); sock.write(packet(A_AUTH, 1, 0, token)) }
           } else if (cmd === A_AUTH && a0 === 3) {
-            if (tv.autoAccept) { tv.trusted.push(data.toString().replace(/\0$/, '')); sock.write(packet(A_CNXN, 0x01000000, tv.maxData, banner)) }
+            if (tv.authDisconnects) { tv.authDisconnects--; sock.destroy(); continue }
+            if (tv.autoAccept) {
+              const accept=():void=>{if(!sock.destroyed){tv.trusted.push(data.toString().replace(/\0$/, '')); sock.write(packet(A_CNXN, 0x01000000, tv.maxData, banner))}}
+              if(tv.authDelayMs)setTimeout(accept,tv.authDelayMs);else accept()
+            }
           } else if (cmd === A_OPEN) {
             if (len > tv.maxData) { sock.destroy(); return }
             const local = a0, remote = nextRemote++

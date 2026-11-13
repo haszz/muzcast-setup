@@ -406,11 +406,13 @@ export default function App() {
                 </>
               )}
               {status.state === 'waiting-auth' && (
-                <p role="status">
-                  Regardez votre TV : acceptez la demande d’autorisation.
-                </p>
+                <div className="mz-note" role="status">
+                  <b>Autorisez la connexion sur votre TV</b>
+                  <p>Choisissez « Autoriser » (Allow) avec votre télécommande. Nous attendons jusqu’à trois minutes et reprenons automatiquement la connexion.</p>
+                  <button onClick={() => void window.cytv.disconnect().catch(() => setError('Impossible d’annuler la connexion. Réessayez.'))}>Annuler la connexion</button>
+                </div>
               )}
-              {busy && <p role="status">{status.transport === 'relay' ? 'Connexion de secours automatique… Si macOS le demande, autorisez Muzcast · Connexion TV.' : 'Connexion en cours…'}</p>}
+              {busy && status.state !== 'waiting-auth' && <p role="status">{status.transport === 'relay' ? 'Connexion de secours automatique… Si macOS le demande, autorisez Muzcast · Connexion TV.' : 'Connexion en cours…'}</p>}
             </section>
           </div>
         )}

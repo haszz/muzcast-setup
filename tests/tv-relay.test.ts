@@ -38,3 +38,14 @@ describe.skipIf(process.platform!=='darwin')('connection fallback',()=>{
  })
 
 })
+
+it('keeps waiting and recreates the relay after an interrupted authorization',async()=>{
+ const states:string[]=[];tv.init('/unused',s=>states.push(s.state))
+ mocks.connect.mockRejectedValueOnce(Object.assign(new Error('EHOSTUNREACH'),{code:'unreachable'}))
+ .mockImplementationOnce(async options=>{options.onAuthPrompt();throw Object.assign(new Error('TV closed'),{code:'auth-interrupted'})})
+ .mockResolvedValueOnce(client())
+ expect(await tv.connect('192.168.31.184')).toMatchObject({state:'connected',transport:'relay'})
+ expect(mocks.start).toHaveBeenCalledTimes(2)
+ expect(mocks.connect.mock.calls[2][0]).toMatchObject({host:'127.0.0.1',relayToken:'abc'})
+ expect(states).not.toContain('error')
+})

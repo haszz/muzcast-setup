@@ -48,27 +48,52 @@ export async function connect(host: string): Promise<ConnStatus> {
     if (!m || (m[2] && (Number(m[2]) < 1 || Number(m[2]) > 65535))) {
       return setStatus({ state: 'error', host, error: 'That is not an address. Type the IP the TV shows under Settings → Network, like 192.168.1.50.' })
     }
+    let authDeadline = 0
     const options = {
       host: m[1],
       port: m[2] ? Number(m[2]) : 5555,
       keys: loadKeys(keyPath),
-      onAuthPrompt: () => { if (!attempt.signal.aborted) setStatus({ state: 'waiting-auth', host,transport:relay?'relay':'direct' }) }
+      signal: attempt.signal,
+      get authTimeoutMs() { return authDeadline ? Math.max(1, authDeadline-Date.now()) : 180000 },
+      onAuthPrompt: () => {
+        if (!authDeadline) authDeadline=Date.now()+180000
+        if (!attempt.signal.aborted) setStatus({ state: 'waiting-auth', host,transport:relay?'relay':'direct' })
+      }
     }
     let c: AdbClient
     let viaRelay = false
-    try { c = await AdbClient.connect(options) } catch (directError) {
+    const connectTransport = async (): Promise<AdbClient> => {
+    try {
+      if(viaRelay)throw new AdbError('EHOSTUNREACH', 'unreachable')
+      return await AdbClient.connect(options)
+    } catch (directError) {
       if (attempt.signal.aborted || !shouldUseRelay(directError as AdbError, m[1])) throw directError
-      setStatus({state:'connecting',host,transport:'relay'})
+      setStatus({state:authDeadline?'waiting-auth':'connecting',host,transport:'relay'})
       ownedRelay = await startRelay(m[1],options.port,attempt.signal)
-      if(attempt.signal.aborted){ownedRelay.stop();return status}
+      if(attempt.signal.aborted){ownedRelay.stop();throw new AdbError('Connexion annulée.', 'closed')}
       relay = ownedRelay
       viaRelay = true
       try {
-        c = await AdbClient.connect({...options,host:'127.0.0.1',port:ownedRelay.port,relayToken:ownedRelay.token,handshakeTimeoutMs:60000})
+        return await AdbClient.connect({...options,host:'127.0.0.1',port:ownedRelay.port,relayToken:ownedRelay.token,handshakeTimeoutMs:60000})
       } catch (relayError) {
         ownedRelay.stop(); if(relay===ownedRelay)relay=null
-        if (['auth','tls','protocol'].includes((relayError as AdbError).code)) throw relayError
+        if (['auth','auth-interrupted','tls','protocol'].includes((relayError as AdbError).code)) throw relayError
         throw new Error(ownedRelay.failure?.() ?? 'La connexion de secours n’a pas abouti. Autorisez Muzcast · Connexion TV si macOS le demande, puis réessayez. Vérifiez aussi que la TV est allumée et que le débogage reste actif.')
+      }
+    }
+    }
+    while(true) {
+      try { c=await connectTransport(); break }
+      catch(error) {
+        if(attempt.signal.aborted)return status
+        if((error as AdbError).code!=='auth-interrupted'||!authDeadline)throw error
+        if(Date.now()>=authDeadline)throw new AdbError('L’autorisation sur la TV n’a pas été confirmée. Choisissez « Autoriser » sur son écran, puis réessayez.', 'auth')
+        setStatus({state:'waiting-auth',host,transport:viaRelay?'relay':'direct'})
+        await new Promise<void>(resolve=>{
+          const done=():void=>{clearTimeout(timer);attempt.signal.removeEventListener('abort',done);resolve()}
+          const timer=setTimeout(done,1000);attempt.signal.addEventListener('abort',done,{once:true})
+        })
+        if(attempt.signal.aborted)return status
       }
     }
     if(attempt.signal.aborted){c.close();return status}
