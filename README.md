@@ -32,6 +32,8 @@ npm run dist:mac
 npm run dist:win
 ```
 
+Pour la publication Mac : voir [la chaîne Developer ID et notarisation](docs/mac-public-release.md), via `npm run release:mac`.
+
 Les builds locaux Mac utilisent une signature ad hoc. Une distribution grand public nécessite la signature Developer ID et la notarisation, ainsi que la signature Windows. Aucun test sur TV physique n’est revendiqué pour cette première version.
 
 ## Sources officielles

@@ -45,7 +45,7 @@ export async function startRelay(host: string, port: number, signal: AbortSignal
       if(typeof state.port==='number' && Number.isInteger(state.port) && state.port>0 && state.port<=65535)return {port:state.port!,token,stop,failure:()=>{
         try {
           const last=JSON.parse(readFileSync(join(directory,'status.json'),'utf8'))
-          if(last.error==='network_failed')return `Le relais Python intégré ne peut pas joindre la TV (erreur réseau ${last.errno ?? 'inconnue'}). Vérifiez que la TV est allumée. Si macOS ne propose aucune autorisation réseau, la connexion reste bloquée ; relancer la recherche ne résout pas ce refus.`
+          if(last.error==='network_failed')return `Le relais Python intégré ne peut pas joindre la TV (erreur réseau ${last.errno ?? 'inconnue'}). Vérifiez que la TV est allumée et sur le même réseau. Si aucune demande macOS n’apparaît, ouvrez Réglages Système → Confidentialité et sécurité → Réseau local et vérifiez que MuzcastNetwork est activé, puis réessayez.`
         } catch {}
         return undefined
       }}
