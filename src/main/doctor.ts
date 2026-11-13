@@ -14,9 +14,6 @@ export interface Failure {
 
 type Ifaces = NodeJS.Dict<NetworkInterfaceInfo[]>
 
-/** Starts the Mac app from Terminal, so it borrows Terminal's Local Network access. */
-export const MAC_FROM_TERMINAL = '/Applications/CleanMyTV.app/Contents/MacOS/CleanMyTV'
-
 /** This computer's own IPv4 addresses on a LAN, without loopback, link-local and VPN tunnels. */
 function lanAddresses(ifaces: Ifaces): string[] {
   const out: string[] = []
@@ -48,10 +45,8 @@ export function diagnose(f: Failure, ifaces: Ifaces, platform: NodeJS.Platform):
   const noRoute = f.errno === 'EHOSTUNREACH' || f.errno === 'ENETUNREACH'
 
   if (platform === 'darwin' && noRoute && sameNet) {
-    hints.push('macOS is probably blocking CleanMyTV from your network. Open System Settings → Privacy & Security → Local Network, switch CleanMyTV on, then quit and reopen the app.')
-    // Some Macs never show the switch for an app without a paid Apple certificate (#65). Started from
-    // Terminal, the app uses Terminal's network access instead.
-    hints.push(`No CleanMyTV switch there? Quit the app, open Terminal and run: ${MAC_FROM_TERMINAL}`)
+    hints.push('Vérifiez Réglages Système → Confidentialité et sécurité → Réseau local : autorisez Muzcast à la maison ou Muzcast Setup si cette entrée apparaît, puis quittez et rouvrez l’application.')
+    hints.push('Ce message ne confirme pas un refus de permission : la TV, le routage ou un filtrage réseau peuvent aussi empêcher la connexion. Si Muzcast est absent de la liste, ouvrez l’application depuis Applications et réessayez pour vérifier si macOS demande une autorisation.')
   }
   if (isIp(f.host) && lan.length && !sameNet) {
     hints.push(`This computer is on ${lan.map((a) => `${prefix(a)}.x`).filter((v, i, all) => all.indexOf(v) === i).join(' and ')}, and the TV is on ${prefix(f.host)}.x. They need to be on the same network: check for a guest Wi-Fi or a second router.`)

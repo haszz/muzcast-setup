@@ -5,7 +5,7 @@ export function parseLink(code: string, now=Date.now()): string | null {
  const age=now-Number(match[2]);return age>=-300000&&age<30*86400000?match[1]:null
 }
 export function codeFromFilename(name:string):string|null {
- const match=/^Muzcast-Setup-0\.1\.3(?:-mac-(?:arm64|x64))?--([0-9a-f-]{36})--(\d{13})\.(?:exe|dmg)$/.exec(name)
+ const match=/^Muzcast-Setup-0\.1\.4(?:-mac-(?:arm64|x64))?--([0-9a-f-]{36})--(\d{13})\.(?:exe|dmg)$/.exec(name)
  return match?`MTV1.${match[1]}.${match[2]}`:null
 }
 export function codeFromUrl(raw:string):string|null {

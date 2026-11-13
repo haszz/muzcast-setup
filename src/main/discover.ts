@@ -1,5 +1,6 @@
 // Find TVs by name: listen for the mDNS adverts Android TVs send, the same way a phone finds them.
 // Nothing here logs in to anything: it reads adverts and checks whether a port accepts a connection.
+import { MacAdbDiscovery } from './mac-discovery'
 import { createSocket, type Socket } from 'node:dgram'
 import { networkInterfaces } from 'node:os'
 import type { FoundTv } from '@shared/api'
@@ -265,6 +266,7 @@ let socket: Socket | null = null
 let timer: NodeJS.Timeout | null = null
 // Kept when listening stops: lifetimes decide what's stale, and the list doesn't blink after a failed connect.
 const cache = new AdvertCache()
+const macDiscovery = process.platform === 'darwin' ? new MacAdbDiscovery() : null
 
 /**
  * One interface at a time, waiting for each send: the outgoing interface is a setting on the socket,
@@ -321,6 +323,7 @@ export function startDiscovery(): void {
 }
 
 export function stopDiscovery(): void {
+  macDiscovery?.stop()
   if (timer) clearTimeout(timer)
   timer = null
   const sock = socket
@@ -334,5 +337,5 @@ export function stopDiscovery(): void {
 
 export async function discover(): Promise<FoundTv[]> {
   startDiscovery()
-  return mergeAdverts(cache.adverts(), (host, port) => probe(host, port, 500))
+  return mergeAdverts([...cache.adverts(), ...(macDiscovery?.adverts() ?? [])], (host, port) => probe(host, port, 500))
 }

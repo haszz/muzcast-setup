@@ -73,7 +73,7 @@ function friendly(err: AdbError): string {
       return 'The TV is there but network debugging is off. Turn on USB debugging (and Network or ADB debugging if you see it) in Developer options. If your TV only has Wireless debugging (most Google TVs and Chromecasts), pair it with a code instead.'
     case 'timeout':
     case 'unreachable':
-      return `${err.message} Check the IP address, that the TV is on, and that this computer is on the same network.`
+      return `Impossible de joindre la TV sur le réseau (${errnoOf(err.message ?? '') || err.code}). Vérifiez son adresse, le débogage et la connexion au même réseau.`
     case 'tls':
       return 'This TV only offers Wireless debugging, which needs a one-time pairing code.'
     case 'auth':

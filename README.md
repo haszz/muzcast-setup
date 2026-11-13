@@ -66,10 +66,14 @@ Paquet NSIS x64 pour Windows 10/11 Intel/AMD : `Muzcast-Setup-0.1.1.exe`. Instal
 
 ### Mesure d’usage et liaison au site (0.1.2)
 
-Consentement explicite dans « Mesure d’usage », modifiable ensuite. Identifiants aléatoires, aucun compte ni adresse de TV dans PostHog. Le même identifiant relie site et assistant seulement après confirmation. Windows conserve `$EXEFILE` via NSIS. Mac examine uniquement les noms de DMG Muzcast 0.1.3 dans Téléchargements ; plusieurs identités candidates ou accès refusé annulent la détection. Expiration 30 jours. Secours par protocole `muzcastsetup://link?code=MTV1.UUID.TIMESTAMP` ou code collé. Un lien n’effectue jamais d’installation ni d’action sur la TV.
+Consentement explicite dans « Mesure d’usage », modifiable ensuite. Identifiants aléatoires, aucun compte ni adresse de TV dans PostHog. Le même identifiant relie site et assistant seulement après confirmation. Windows conserve `$EXEFILE` via NSIS. Mac examine uniquement les noms de DMG Muzcast 0.1.4 dans Téléchargements ; plusieurs identités candidates ou accès refusé annulent la détection. Expiration 30 jours. Secours par protocole `muzcastsetup://link?code=MTV1.UUID.TIMESTAMP` ou code collé. Un lien n’effectue jamais d’installation ni d’action sur la TV.
 
 Événements natifs : ouverture, liaison, début/résultat/durée de connexion, association, installation, nettoyage/restauration et ouverture d’app. `app_installed` est émis seulement après vérification du versionCode via ADB. Aucun suivi sans accord ; la révocation change l’identifiant. Les tests utilisent `is_test=true` et sont exclus du dashboard.
 
 ### Détection réseau (0.1.3)
 
 La découverte inclut `_adb._tcp.local`, en plus des annonces Android TV et ADB sans fil. Le port ADB classique annoncé est utilisé, y compris hors 5555. Une annonce détectée ne garantit pas la connexion TCP : une TV inaccessible reste proposée pour réessayer sans demander une association TLS. Le correctif ne contourne pas les autorisations réseau de macOS.
+
+### Bonjour natif sur macOS (0.1.4)
+
+La découverte ADB classique complète le multicast UDP avec le service Bonjour de macOS (`dns-sd -B`, `-L`, puis `-G v4`). Les noms annoncés, même `localhost.local.`, sont résolus en adresse réseau par Bonjour et ne sont pas assimilés à la boucle locale. Les processus sont bornés et arrêtés à la fermeture de la découverte. Une annonce visible ne garantit pas l’accès TCP/ADB : ce statut reste vérifié séparément.
