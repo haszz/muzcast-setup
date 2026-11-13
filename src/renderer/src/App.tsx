@@ -286,12 +286,12 @@ export default function App() {
                         setHost(t.host.split(':')[0])
                         setPairPort(String(t.pairPort || ''))
                         setPort(String(t.connectPort || ''))
-                        if (t.ready) void connect(t.host)
+                        if (t.adbPort || t.ready) void connect(t.adbPort ? `${t.host}:${t.adbPort}` : t.host)
                         else setPairing(true)
                       }}
                     >
                       <Icon name="tv"/> <strong>{t.name || t.host}</strong>
-                      <span>{t.ready ? 'Connecter →' : 'Associer →'}</span>
+                      <span>{t.ready ? 'Connecter →' : t.adbPort ? 'Réessayer la connexion →' : 'Associer →'}</span>
                     </button>
                   ))}
                   {!found.length && (

@@ -1,7 +1,7 @@
 // mDNS discovery: these packets come from anyone on the network, and the result fills in the Setup form.
 import { describe, expect, it, vi } from 'vitest'
 import {
-  AdvertCache, CONNECT_SERVICE, NAME_SERVICE, PAIR_SERVICE, TYPE_A, TYPE_PTR, TYPE_SRV,
+  AdvertCache, LEGACY_SERVICE, CONNECT_SERVICE, NAME_SERVICE, PAIR_SERVICE, TYPE_A, TYPE_PTR, TYPE_SRV,
   buildQuery, mergeAdverts, parseDnsResponse, sendOnEach, type Advert, type DnsRecord
 } from '../src/main/discover'
 
@@ -268,3 +268,27 @@ describe('sendOnEach', () => {
     expect(raw.addMembership).toHaveBeenCalledTimes(1)
   })
 })
+
+ describe('classic ADB adverts', () => {
+  it('queries and resolves the service advertised by the TCL TV', async () => {
+    const cache = new AdvertCache()
+    expect(cache.questions()).toContainEqual({labels: LEGACY_SERVICE.split('.'), type: TYPE_PTR})
+    const instance = ['adb-180AC0C20270780DD', '_adb', '_tcp', 'local']
+    cache.add([
+      {key:LEGACY_SERVICE,type:TYPE_PTR,ttl:120,labels:instance},
+      {key:instance.join('.').toLowerCase(),type:TYPE_SRV,ttl:120,labels:['localhost','local'],port:5555},
+      {key:'localhost.local',type:TYPE_A,ttl:120,ip:'192.168.31.184'}
+    ])
+    const [tv] = await mergeAdverts(cache.adverts(), async () => true)
+    expect(tv).toMatchObject({host:'192.168.31.184',adbPort:5555,ready:true})
+  })
+  it('uses a nonstandard classic port without treating it as TLS', async () => {
+    const [tv] = await mergeAdverts([{service:LEGACY_SERVICE,instance:'adb',ip:'192.168.1.2',port:5877}], async (_,p) => p===5877)
+    expect(tv).toMatchObject({adbPort:5877,ready:true})
+    expect(tv.connectPort).toBeUndefined()
+  })
+  it('keeps a discovered but unreachable TV available for retry', async () => {
+    const [tv] = await mergeAdverts([{service:LEGACY_SERVICE,instance:'adb',ip:'192.168.1.2',port:5555}], async () => false)
+    expect(tv).toMatchObject({adbPort:5555,ready:false})
+  })
+ })

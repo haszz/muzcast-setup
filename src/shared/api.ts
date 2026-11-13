@@ -40,6 +40,8 @@ export interface ScanHit {
 
 /** A TV that advertised itself on the network. Finding one never logs in to it. */
 export interface FoundTv {
+  /** Classic ADB endpoint; never a TLS pairing port. */
+  adbPort?: number
   host: string
   /** The TV's own name, when it advertises one. */
   name: string

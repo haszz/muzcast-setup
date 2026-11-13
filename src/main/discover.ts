@@ -17,13 +17,14 @@ const MAX_NAME = 255
 export const NAME_SERVICE = '_androidtvremote2._tcp.local'
 export const CONNECT_SERVICE = '_adb-tls-connect._tcp.local'
 export const PAIR_SERVICE = '_adb-tls-pairing._tcp.local'
-const SERVICES = [NAME_SERVICE, CONNECT_SERVICE, PAIR_SERVICE]
+export const LEGACY_SERVICE = '_adb._tcp.local'
+const SERVICES = [NAME_SERVICE, CONNECT_SERVICE, PAIR_SERVICE, LEGACY_SERVICE]
 const MAX_INSTANCES = 64
 const MAX_QUESTIONS = 20
 /** Ask again before a detail runs out, so a TV doesn't drop off the list while it's still there. */
 const REFRESH_BEFORE_MS = 15_000
 
-/** Classic network ADB doesn't advertise itself: look for it on any address the adverts turned up. */
+/** Also probe the conventional ADB port for TVs without an ADB advert. */
 const LEGACY_PORT = 5555
 
 export interface DnsRecord {
@@ -216,10 +217,12 @@ export async function mergeAdverts(
 ): Promise<FoundTv[]> {
   const tvs = new Map<string, FoundTv>()
   const connectPorts = new Map<string, number[]>()
+  const legacyPorts = new Map<string, number[]>()
   for (const a of adverts) {
     const tv = tvs.get(a.ip) ?? { host: a.ip, name: '', ready: false }
     tvs.set(a.ip, tv)
     if (a.service === NAME_SERVICE) tv.name = cleanName(a.instance)
+    else if (a.service === LEGACY_SERVICE) legacyPorts.set(a.ip, [a.port, ...(legacyPorts.get(a.ip) ?? []).filter((p) => p !== a.port)])
     else if (a.service === PAIR_SERVICE) tv.pairPort = a.port
     // Newest first: a TV that restarted Wireless debugging can still have its old port cached.
     else if (a.service === CONNECT_SERVICE) connectPorts.set(a.ip, [a.port, ...(connectPorts.get(a.ip) ?? []).filter((p) => p !== a.port)])
@@ -227,7 +230,15 @@ export async function mergeAdverts(
   await Promise.all(
     [...tvs.values()].map(async (tv) => {
       // An advert can claim any port: the rule holds whichever service names the pairing port.
-      tv.ready = tv.pairPort !== LEGACY_PORT && (await portOpen(tv.host, LEGACY_PORT))
+      const ports = [...new Set([...(legacyPorts.get(tv.host) ?? []), LEGACY_PORT])].filter(p => p !== tv.pairPort)
+      if (legacyPorts.has(tv.host) && ports.length) tv.adbPort = ports[0]
+      for (const port of ports) {
+        if (await portOpen(tv.host, port)) {
+          tv.ready = true
+          if (legacyPorts.has(tv.host)) tv.adbPort = port
+          break
+        }
+      }
       for (const port of connectPorts.get(tv.host) ?? []) {
         if (port !== tv.pairPort && (await portOpen(tv.host, port))) {
           tv.connectPort = port
