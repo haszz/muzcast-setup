@@ -12,6 +12,7 @@ vi.mock('../src/main/tv', () => ({
 vi.mock('../src/main/sideload', () => ({ install: mock.install }))
 vi.mock('../src/main/muzcast-release', () => ({
   PRODUCTS: {
+    launcher: { name: 'Muzcast TV', manifest: 'manifest', package: 'com.gathin.tvhome' },
     muzcast: {
       name: 'Muzcast',
       manifest: 'manifest',
@@ -61,11 +62,25 @@ it('opens the resolved TV activity, not the phone launcher category', async () =
   expect(mock.shell).toHaveBeenLastCalledWith('am start -W -a android.intent.action.MAIN -c android.intent.category.LEANBACK_LAUNCHER -n co.muzcast.tv/.TvActivity')
 })
 it('explains an absent app without attempting to launch it', async () => {
-  mock.shell.mockResolvedValueOnce('No activity found')
+  mock.shell.mockResolvedValueOnce('No activity found').mockResolvedValueOnce('No activities found').mockResolvedValueOnce('')
   await expect(open('muzcast')).rejects.toThrow('Installer Muzcast')
-  expect(mock.shell).toHaveBeenCalledTimes(1)
+  expect(mock.shell).toHaveBeenCalledTimes(3)
 })
 it('does not claim that a rejected TV launch succeeded', async () => {
   mock.shell.mockResolvedValueOnce('co.muzcast.tv/.TvActivity').mockResolvedValueOnce('Error: Permission Denial')
   await expect(open('muzcast')).rejects.toThrow('Applications → Muzcast')
+})
+
+it('opens the home instead of Adhkar when Android resolves to its chooser', async () => {
+  mock.shell.mockResolvedValueOnce('android/com.android.internal.app.ResolverActivity')
+    .mockResolvedValueOnce('2 activities found:\ncom.gathin.tvhome/.AdhkarApp\ncom.gathin.tvhome/.MainActivity')
+    .mockResolvedValueOnce('Status: ok');
+  await expect(open('launcher')).resolves.toBeUndefined()
+  expect(mock.shell).toHaveBeenLastCalledWith('am start -W -a android.intent.action.MAIN -c android.intent.category.LEANBACK_LAUNCHER -n com.gathin.tvhome/.MainActivity')
+})
+it('does not report an installed app as absent when no safe entry can be identified', async () => {
+  mock.shell.mockResolvedValueOnce('No activity found').mockResolvedValueOnce('No activities found')
+    .mockResolvedValueOnce('package:/data/app/base.apk')
+  await expect(open('muzcast')).rejects.toThrow('est installé')
+  expect(mock.shell.mock.calls.some(([cmd]) => cmd.startsWith('am start'))).toBe(false)
 })

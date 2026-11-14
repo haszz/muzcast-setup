@@ -69,11 +69,29 @@ export async function open(product: Product): Promise<void> {
   const resolved = await T.tv().shell(
     `cmd package resolve-activity --brief -a android.intent.action.MAIN -c ${category} ${app.package}`,
   )
-  const component = resolved.trim().split(/\s+/).find(value =>
+  const components = (output: string): string[] => output.trim().split(/\s+/).filter(value =>
     value.startsWith(`${app.package}/`) && /^[a-zA-Z0-9_.$/]+$/.test(value),
   )
-  if (!component)
-    throw Error(`${app.name} n’est pas disponible sur la TV. Revenez à « Installer Muzcast » pour vérifier son installation.`)
+  let component: string | undefined = components(resolved)[0]
+  if (!component) {
+    // Several TV entries can belong to one package (Muzcast TV + Adhkar).
+    // In that case resolve-activity returns Android's chooser, not an absent app.
+    const candidates = components(await T.tv().shell(
+      `cmd package query-activities --brief -a android.intent.action.MAIN -c ${category} ${app.package}`,
+    ))
+    if (product === 'launcher') {
+      component = candidates.find(value =>
+        value === `${app.package}/.MainActivity` || value === `${app.package}/${app.package}.MainActivity`,
+      )
+    }
+    if (!component && candidates.length === 1) component = candidates[0]
+  }
+  if (!component) {
+    const installed = await T.tv().shell(`pm path ${app.package}`)
+    if (!/^package:/m.test(installed))
+      throw Error(`${app.name} n’est pas disponible sur la TV. Revenez à « Installer Muzcast » pour vérifier son installation.`)
+    throw Error(`${app.name} est installé, mais son écran d’accueil n’a pas pu être identifié. Sur la TV, ouvrez Applications → ${app.name}.`)
+  }
   const result = await T.tv().shell(
     `am start -W -a android.intent.action.MAIN -c ${category} -n ${component}`,
   )
