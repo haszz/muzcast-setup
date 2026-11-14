@@ -165,7 +165,7 @@ export async function install(chosen?: string): Promise<InstallResult> {
   await T.sh(TASK, `pm grant ${HOME_PKG} android.permission.WRITE_SECURE_SETTINGS 2>/dev/null; appops set ${HOME_PKG} WRITE_SETTINGS allow 2>/dev/null; echo settings-granted`)
   // TCL's TclAppBoot (app op APP_AUTO_START) keeps third-party apps from starting by themselves: at boot the key
   // service stays unbound (the TV wakes on Google TV) and the adhan alarms are not set again. Other TVs lack the op.
-  await T.sh(TASK, `appops set ${HOME_PKG} APP_AUTO_START allow 2>/dev/null; echo autostart-granted`)
+  await T.sh(TASK, `appops set ${HOME_PKG} APP_AUTO_START allow 2>/dev/null; appops write-settings 2>/dev/null; echo autostart-granted`)
   const start = await T.sh(TASK, `am start -W -n ${MAIN}`)
   if (!start.includes('Status: ok') || /^Error/im.test(start)) {
     return { ok: false, summary: 'CleanMyTV Home did not start, so Home was left as it was.', warnings: [start.trim()] }

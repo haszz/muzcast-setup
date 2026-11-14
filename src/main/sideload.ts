@@ -77,7 +77,7 @@ export async function install(path: string): Promise<ApplyResult> {
     progress({ tool: 'sideload', received: 1, total: 1, phase: 'done' })
     if (/Success/.test(out)) {
       // The Muzcast TV app sets its prayer alarms at boot: on TCL, TclAppBoot (APP_AUTO_START) blocks that by default.
-      if (info.package === 'co.muzcast.tv') await T.sh(TASK, `appops set ${info.package} APP_AUTO_START allow 2>/dev/null; echo autostart-granted`)
+      if (info.package === 'co.muzcast.tv') await T.sh(TASK, `appops set ${info.package} APP_AUTO_START allow 2>/dev/null; appops write-settings 2>/dev/null; echo autostart-granted`)
       return { ok: true, summary: `Installed ${name}. It's in Home's app list now.`, warnings: [] }
     }
     const code = /\[?(INSTALL_[A-Z_]+)/.exec(out)?.[1] ?? out.trim()
