@@ -37,3 +37,5 @@
 .mz-finish-app{display:flex;flex-direction:column}.mz-finish-app>div{display:flex;flex-direction:column;flex:1;align-items:flex-start}.mz-finish-app button{margin-top:auto}
 
 .mz-device-identity{flex:1;min-width:0}.mz-device-identity strong{display:block}.mz-device-identity small{display:block;color:var(--muted);font-weight:400;margin-top:4px;overflow-wrap:anywhere}
+
+.mz-product{cursor:default}.mz-advanced{margin:22px 0 4px;color:var(--muted);font-size:12px}.mz-advanced summary{cursor:pointer;padding:12px 0;font-weight:550}.mz-advanced>p{max-width:650px;line-height:1.7;margin:8px 0 16px}.mz-install-options{display:flex;flex-wrap:wrap;gap:16px}.mz-main .mz-install-options label{display:flex;align-items:center;gap:12px;background:#fff;padding:16px 20px;border-radius:16px;cursor:pointer}.mz-install-options small{display:block;font-weight:400;margin-top:4px}.mz-open-tv{display:inline-flex;align-items:center;gap:10px}.mz-finish-preview{display:block;width:100%;border-radius:20px;margin:24px 0}.mz-finish .mz-open-hint{font-size:12px;max-width:520px;margin-top:12px}

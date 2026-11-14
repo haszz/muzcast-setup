@@ -84,3 +84,18 @@ it('does not report an installed app as absent when no safe entry can be identif
   await expect(open('muzcast')).rejects.toThrow('est installé')
   expect(mock.shell.mock.calls.some(([cmd]) => cmd.startsWith('am start'))).toBe(false)
 })
+
+it.each([
+  ['both', 'package:co.muzcast.tv\npackage:com.gathin.tvhome', 'com.gathin.tvhome/.MainActivity'],
+  ['launcher only', 'package:com.gathin.tvhome', 'com.gathin.tvhome/.MainActivity'],
+  ['audio only', 'package:co.muzcast.tv', 'co.muzcast.tv/.TvActivity'],
+])('automatically opens the installed app: %s', async (_name, packages, component) => {
+  mock.shell.mockResolvedValueOnce(packages).mockResolvedValueOnce(component).mockResolvedValueOnce('Status: ok')
+  await expect(open('auto')).resolves.toBeUndefined()
+  expect(mock.shell).toHaveBeenLastCalledWith(`am start -W -a android.intent.action.MAIN -c android.intent.category.LEANBACK_LAUNCHER -n ${component}`)
+})
+it('does not confuse similarly named packages with an installed Muzcast app', async () => {
+  mock.shell.mockResolvedValueOnce('package:co.muzcast.tv.other\npackage:com.gathin.tvhome.other')
+  await expect(open('auto')).rejects.toThrow('Aucune application Muzcast')
+  expect(mock.shell).toHaveBeenCalledTimes(1)
+})

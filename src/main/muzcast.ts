@@ -61,7 +61,14 @@ export async function install(product: Product): Promise<{ version: string }> {
     if (dir) await rm(dir, { recursive: true, force: true })
   }
 }
-export async function open(product: Product): Promise<void> {
+export async function open(product: Product | 'auto' = 'auto'): Promise<void> {
+  if (busy) throw Error('Action indisponible.')
+  if (product === 'auto') {
+    const packages = new Set((await T.tv().shell('pm list packages')).split(/\r?\n/).map(line => line.trim()))
+    if (packages.has(`package:${PRODUCTS.launcher.package}`)) product = 'launcher'
+    else if (packages.has(`package:${PRODUCTS.muzcast.package}`)) product = 'muzcast'
+    else throw Error('Aucune application Muzcast installée sur cette TV. Revenez à « Installer Muzcast ».')
+  }
   if (!Object.hasOwn(PRODUCTS, product) || busy)
     throw Error('Action indisponible.')
   const app = PRODUCTS[product]
