@@ -75,7 +75,11 @@ export async function install(path: string): Promise<ApplyResult> {
     progress({ tool: "sideload", received: 0, total: 0, phase: "install", message: "Android installe l’application. Cette étape peut prendre quelques minutes." })
     const out = await T.sh(TASK, `pm install -r ${TMP}`, { timeoutMs: 300000 })
     progress({ tool: 'sideload', received: 1, total: 1, phase: 'done' })
-    if (/Success/.test(out)) return { ok: true, summary: `Installed ${name}. It's in Home's app list now.`, warnings: [] }
+    if (/Success/.test(out)) {
+      // The Muzcast TV app sets its prayer alarms at boot: on TCL, TclAppBoot (APP_AUTO_START) blocks that by default.
+      if (info.package === 'co.muzcast.tv') await T.sh(TASK, `appops set ${info.package} APP_AUTO_START allow 2>/dev/null; echo autostart-granted`)
+      return { ok: true, summary: `Installed ${name}. It's in Home's app list now.`, warnings: [] }
+    }
     const code = /\[?(INSTALL_[A-Z_]+)/.exec(out)?.[1] ?? out.trim()
     const why = REASONS.find(([re]) => re.test(out))?.[1]
     return { ok: false, summary: `The TV didn't install ${name}.`, warnings: [why ?? `Android said: ${code}`] }
