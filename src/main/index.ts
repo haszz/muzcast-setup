@@ -145,6 +145,7 @@ const handlers: Omit<Handlers, 'onLog' | 'onProgress' | 'onStatus'> = {
   bugReport: () => bugReport(app.getVersion()),
   checks,
   download: (tool) => tools.get(tool),
+  recoveryLists: async () => debloat.recoveryLists(),
   lists: async () => debloat.lists(T.getStatus().probe),
   plan: (id) => debloat.plan(id),
   tvPackages: () => debloat.tvPackages(),

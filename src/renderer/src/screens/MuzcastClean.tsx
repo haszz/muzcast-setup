@@ -156,7 +156,7 @@ export function Clean({
         <div className="mz-opt-tiles">{stages.map((item,index)=><button key={item.title} disabled={busy} aria-label={`Étape ${index+1} : ${item.title}`} onClick={()=>setStage(index)}>
           <span className="mz-opt-symbol"><Icon name={item.icon}/></span><strong>{item.title}</strong><span>{reviewed.includes(index)?(summaries[index]||'Réglages conservés'):item.description}</span><small>{reviewed.includes(index)?'Choix examinés':'Étape '+(index+1)} <Icon name="right"/></small>
         </button>)}</div>
-        <div className="mz-action"><span>{reviewed.length}/3 étapes examinées</span><button className="mz-primary" disabled={busy} onClick={()=>reviewed.length===3?onNext():setStage([0,1,2].find(n=>!reviewed.includes(n))??0)}>{reviewed.length===3?'En profiter':'Commencer'+(reviewed.length?' la suite':'')} <Icon name="right"/></button></div>
+        <div className="mz-action"><span>{reviewed.length}/3 étapes examinées</span><button className="mz-primary" disabled={busy} onClick={()=>reviewed.length===3?onNext():setStage([0,1,2].find(n=>!reviewed.includes(n))??0)}>{reviewed.length===3?'Continuer sur la TV':'Commencer'+(reviewed.length?' la suite':'')} <Icon name="right"/></button></div>
       </section>}
       {stage!==null && <div className="mz-opt-stage-heading"><button className="mz-link" disabled={busy} onClick={()=>setStage(null)}><Icon name="left"/> Vue d’ensemble</button><span>Étape {stage+1} sur 3</span><h2 ref={stageHeading} tabIndex={-1}>{stages[stage].title}</h2></div>}
       <div hidden={stage!==0}>

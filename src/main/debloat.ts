@@ -513,6 +513,13 @@ function savedActive(file: string): string[] {
   }
 }
 
+/** List only local recovery records; no repeated package scans on the TV. */
+export function recoveryLists(): {id:string;title:string}[] {
+  const probe=T.getStatus().probe
+  if (!probe || T.getStatus().state!=='connected') throw Error('Connectez la TV pour retrouver ses sauvegardes.')
+  return lists(probe).filter(list=>findRecord(savedListPath(list.id,probe),probe.host,probe.device||undefined).record).map(({id,title})=>({id,title}))
+}
+
 export async function plan(listId: string): Promise<DebloatPlan> {
   const probe = T.getStatus().probe
   if (!probe) throw new Error('Connect to a TV first.')

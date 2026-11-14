@@ -215,3 +215,17 @@
 .mz-dns-result:disabled { opacity:1; color:var(--muted,#6b6f66); cursor:default; }
 .mz-dns-result[aria-pressed="true"] { background:#fff0ec; color:#b32e0b; }
 @media(max-width:1050px) { .mz-dns-results {grid-template-columns:1fr;} }
+
+/* Guided completion: visible actions with a consistent rhythm. */
+.mz-guided-actions,.mz-recovery-actions { display:flex; flex-wrap:wrap; gap:12px; margin:24px 0; align-items:stretch; }
+.mz-guided-actions button,.mz-recovery-actions button { display:inline-flex; align-items:center; justify-content:center; gap:10px; min-height:48px; padding:14px 22px; }
+.mz-check-stage { padding:20px 0; }
+.mz-check-stage h3 { display:flex; align-items:center; gap:12px; }
+.mz-recovery { max-height:85vh; overflow:auto; width:min(760px,90vw); }
+.mz-recovery select { display:block; width:100%; margin-top:12px; padding:12px; }
+.mz-panel[hidden] { display:none; }
+.mz-journey .mz-sidebar { overflow-y:auto; }
+.mz-journey .mz-sidebar nav { gap:6px; margin-top:18px; }
+.mz-journey .mz-sidebar nav button { min-height:60px; padding:10px 12px; }
+@media(max-height:850px) { .mz-journey .mz-intro { display:none; } .mz-journey .mz-sidebar { padding-top:22px; } .mz-journey .mz-sidebar-bottom { padding-top:14px; } }
+@media(max-width:560px) { .mz-journey .mz-sidebar nav { grid-template-columns:repeat(3,minmax(0,1fr)); } .mz-journey .mz-sidebar-bottom { display:block; } }

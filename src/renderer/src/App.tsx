@@ -9,6 +9,7 @@ import type {
   DownloadProgress,
   MuzcastAppStatus,
 } from '@shared/api'
+import { TvHandoff, Recovery } from './components/GuidedCompletion'
 import { TvFinishChecks } from './components/TvFinishChecks'
 import { Clean } from './screens/MuzcastClean'
 import logo from './assets/logo.svg'
@@ -57,6 +58,8 @@ const labels = [
   'Connecter ma TV',
   'Installer Muzcast TV',
   'Optimiser ma TV',
+  'Continuer sur la TV',
+  'Vérifier ma TV',
   'En profiter',
 ]
 export default function App({ previewStep = 0 }: { previewStep?: number }) {
@@ -64,8 +67,10 @@ export default function App({ previewStep = 0 }: { previewStep?: number }) {
   const [measureOpen,setMeasureOpen]=useState(false),[linkCode,setLinkCode]=useState(''),[measureError,setMeasureError]=useState('')
   useEffect(()=>{if(!window.cytv.telemetryStatus)return;const check=()=>window.cytv.telemetryStatus().then(s=>{setMeasurement(s);if(s.enabled===null||s.pendingLink)setMeasureOpen(true)});void check();const timer=setInterval(check,1500);return()=>clearInterval(timer)},[])
   async function measurementChoice(enabled:boolean){try{setMeasurement(await window.cytv.telemetryPreference(enabled,linkCode));setMeasureOpen(false);setLinkCode('');setMeasureError('')}catch{setMeasureError('Code invalide ou expiré. Recopiez le code du site.')}}
+  const [recoveryOpen, setRecoveryOpen] = useState(false)
   const about = useRef<HTMLDialogElement>(null)
   const mainTitle = useRef<HTMLHeadingElement>(null)
+  const [journeyHost,setJourneyHost] = useState('')
   const [prepared, setPrepared] = useState(false)
   const [appStatus, setAppStatus] = useState<MuzcastAppStatus[] | null>(null)
   const [checking, setChecking] = useState(false)
@@ -95,6 +100,7 @@ export default function App({ previewStep = 0 }: { previewStep?: number }) {
   }, [status.host])
   useEffect(() => { setFurthestStep(s => Math.max(s, step)); mainTitle.current?.focus({preventScroll:true}); window.scrollTo({top:0,behavior:'instant'}) }, [step])
   const connected = status.state === 'connected'
+  useEffect(()=>{if(connected && status.host && status.host!==journeyHost){setJourneyHost(status.host);if(journeyHost){setStep(0);setFurthestStep(0)}}},[connected,status.host,journeyHost])
   const demo = !navigator.userAgent.includes('Electron')
   useEffect(() => {
     window.cytv.status().then(setStatus)
@@ -193,6 +199,7 @@ export default function App({ previewStep = 0 }: { previewStep?: number }) {
         <details><summary>Crédits et licence MIT</summary><pre>{license}</pre></details>
         <p><a href="https://github.com/haszz/muzcast-setup" target="_blank" rel="noreferrer">Code source du projet <Icon name="arrow"/></a></p>
       </dialog>
+      {recoveryOpen && <Recovery connected={connected} onClose={()=>setRecoveryOpen(false)} setParentBusy={setBusy} />}
       <aside className="mz-sidebar">
         <img className="mz-logo" src={logo} alt="Muzcast" />
         <span className="mz-tag">À la maison</span>
@@ -205,7 +212,7 @@ export default function App({ previewStep = 0 }: { previewStep?: number }) {
           {labels.map((l, i) => (
             <button
               key={l}
-              disabled={busy || (i > 0 && !connected) || i > Math.max(furthestStep, connected ? 1 : 0)}
+              disabled={busy || (i > 0 && i < 4 && !connected) || i > Math.max(furthestStep, connected ? 1 : 0)}
               className={step === i ? 'current' : i < step ? 'complete' : ''}
               onClick={() => {
                 setError('')
@@ -213,15 +220,16 @@ export default function App({ previewStep = 0 }: { previewStep?: number }) {
               }}
               aria-current={step === i ? 'step' : undefined}
             >
-              <span className="mz-nav-icon"><Icon name={i < step ? 'check' : (['tv','download','clean','play'] as const)[i]}/></span>
+              <span className="mz-nav-icon"><Icon name={i < step ? 'check' : (['tv','download','clean','apps','shield','play'] as const)[i]}/></span>
               <div>
                 {l}
-                <small>{['Préparer et connecter', 'Installer ou mettre à jour', 'Apps, fluidité et confidentialité', 'Ouvrir sur grand écran'][i]}</small>
+                <small>{['Préparer et connecter', 'Installer ou mettre à jour', 'Apps, fluidité et confidentialité', 'Configuration avec la télécommande', 'Redémarrage et accès', 'Ouvrir sur grand écran'][i]}</small>
               </div>
             </button>
           ))}
         </nav>
         <div className="mz-sidebar-bottom">
+          <button className="mz-sidebar-action" disabled={busy} onClick={()=>setRecoveryOpen(true)}><Icon name="refresh"/> Restaurer ma TV</button>
           <div className={'mz-sidebar-status' + (connected ? ' is-connected' : '')} role="status">
             <span className="mz-sidebar-status-icon"><Icon name="tv" /></span>
             <div><strong>{connected ? status.probe?.model || 'TV connectée' : 'Votre télévision'}</strong>
@@ -248,13 +256,15 @@ export default function App({ previewStep = 0 }: { previewStep?: number }) {
           </div>
         )}
         <header className="mz-header">
-          <div className="mz-header-meta"><span className="mz-eyebrow">BIENVENUE CHEZ VOUS</span><span className="mz-step-count">Étape {step + 1} sur 4</span></div>
+          <div className="mz-header-meta"><span className="mz-eyebrow">BIENVENUE CHEZ VOUS</span><span className="mz-step-count">Étape {step + 1} sur {labels.length}</span></div>
           <h1 ref={mainTitle} tabIndex={-1}>
             {
               [
                 'Installons Muzcast TV.',
                 active ? 'Votre TV se prépare.' : 'Muzcast TV, prêt pour vous.',
                 'Votre TV peut faire mieux.',
+                'Votre TV prend le relais.',
+                'Les dernières vérifications.',
                 'Votre TV, à votre image.',
               ][step]
             }
@@ -265,6 +275,8 @@ export default function App({ previewStep = 0 }: { previewStep?: number }) {
                 'Quelques minutes pour réunir vos récits, vos prières et vos applications préférées.',
                 active ? 'Suivez l’installation et découvrez votre nouvel univers Muzcast.' : 'Votre nouvel accueil et tous vos récits, réunis en une installation.',
                 'Réglez l’essentiel, étape par étape.',
+                'Personnalisez Muzcast directement sur grand écran.',
+                'Vérifiez le démarrage, puis fermez l’accès de configuration.',
                 'Retrouvez Muzcast dans les applications de votre téléviseur.',
               ][step]
             }
@@ -478,6 +490,7 @@ export default function App({ previewStep = 0 }: { previewStep?: number }) {
             </div>}
           </>
         )}
+        {step === 3 && <TvHandoff connected={connected} setParentBusy={setBusy} onNext={()=>setStep(4)} />}
         {step === 2 && (
           <Clean
             onNext={() => setStep(3)}
@@ -486,18 +499,19 @@ export default function App({ previewStep = 0 }: { previewStep?: number }) {
             probe={status.probe}
           />
         )}
-        {step === 3 && (
+        {furthestStep >= 4 && <section hidden={step!==4} className="mz-panel"><TvFinishChecks key={journeyHost} status={status} setParentBusy={setBusy} onNext={()=>setStep(5)} /></section>}
+        {step === 5 && (
           <section className="mz-panel mz-finish">
             <span className="mz-eyebrow">BIENVENUE CHEZ VOUS</span>
             <h2>À vous le grand écran.</h2>
-            <p>Tout est prêt. Ouvrez Muzcast sur votre téléviseur pour commencer à en profiter.</p>
+            <p>Votre parcours est terminé. Retrouvez Muzcast dans les applications de votre TV.</p>
             <button disabled={busy || !connected} className="mz-primary mz-open-tv"
               onClick={() => void run(() => window.cytv.openMuzcast('auto'))}>
               <Icon name="play" /> {busy ? 'Ouverture en cours…' : 'Ouvrir sur la TV'}
             </button>
             <p className="mz-open-hint">Muzcast Launcher s’ouvre s’il est installé. Sinon, Muzcast app s’ouvre directement.</p>
             <img className="mz-finish-preview" src={selected.includes('launcher') ? launcher : accueil} alt="Votre univers Muzcast sur la TV" />
-            <TvFinishChecks status={status} setParentBusy={setBusy} />
+
             <a href="https://tv.muzcast.co" target="_blank" rel="noreferrer">
               Découvrir toutes les fonctionnalités <Icon name="right"/>
             </a>

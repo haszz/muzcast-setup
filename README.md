@@ -79,3 +79,26 @@ La découverte inclut `_adb._tcp.local`, en plus des annonces Android TV et ADB 
 ### Bonjour natif sur macOS (0.1.4)
 
 La découverte ADB classique complète le multicast UDP avec le service Bonjour de macOS (`dns-sd -B`, `-L`, puis `-G v4`). Les noms annoncés, même `localhost.local.`, sont résolus en adresse réseau par Bonjour et ne sont pas assimilés à la boucle locale. Les processus sont bornés et arrêtés à la fermeture de la découverte. Une annonce visible ne garantit pas l’accès TCP/ADB : ce statut reste vérifié séparément.
+
+### Parcours guidé Muzcast
+
+Le parcours comporte six étapes : préparer/connecter la TV, installer ou mettre à jour
+le bundle, optimiser, continuer sur la TV, vérifier, puis ouvrir Muzcast.
+L’optimisation et le test DNS précèdent la liaison au compte.
+
+La configuration du thème, du compte, des permissions Android, de l’accueil par défaut,
+du lieu et de l’adhan reste dans `OnboardingActivity` du launcher. L’installateur ouvre
+l’application normalement : il ne réinitialise pas son onboarding et ne duplique pas ses
+choix. L’utilisateur confirme qu’il a terminé sur la TV ; cette confirmation n’est pas
+présentée comme une détection automatique de l’état de l’onboarding.
+
+Les vérifications finales proposent un redémarrage, puis la fermeture du débogage
+et deux contrôles du port (avant et après un nouveau redémarrage). Une sortie explicite
+sans toutes les vérifications reste possible. Le parcours reste accessible après la
+fermeture volontaire du débogage.
+
+« Restaurer ma TV » reste accessible dans la navigation : accueil constructeur,
+DNS/animations et sauvegardes de nettoyage. Les sauvegardes sont lues localement ;
+les applications désactivées sont restaurées selon leur état enregistré. Il faut
+reconnecter la TV et réactiver son débogage pour restaurer. Les caches effacés ne sont
+pas restaurables. Les applications Muzcast ne sont pas désinstallées.

@@ -224,6 +224,7 @@ export function installMock(): void {
     },
     download: (tool) => fakeDownload(tool),
     async appMetadata(packages) { return packages.map(pkg=>({pkg,label:pkg.split('.').at(-1) || pkg,system:true})) },
+    async recoveryLists() { return [{id:'custom',title:'Votre nettoyage sauvegardé'}] },
     async lists() {
       await wait(200)
       return [

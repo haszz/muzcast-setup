@@ -92,6 +92,9 @@ describe('talking to a TV', () => {
     expect(record.home).toBe('com.google.android.tvlauncher/.MainActivity')
     expect(record.settings.window_animation_scale).toBe('0.5')
 
+    const commandsBeforeRecovery = tv.commands.length
+    expect(D.recoveryLists().map(r => r.id)).toContain('custom')
+    expect(tv.commands.length).toBe(commandsBeforeRecovery) // local lookup must not scan or alter the TV
     const res = await D.restore('custom')
     expect(res.ok).toBe(true)
     expect(tv.packages.get('com.sony.dtv.promos')).toBe('enabled')

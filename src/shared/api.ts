@@ -488,6 +488,7 @@ export interface CytvApi {
   download(tool: ToolId): Promise<ApplyResult>
 
   // Debloat
+  recoveryLists(): Promise<{id:string;title:string}[]>
   lists(): Promise<DebloatListSummary[]>
   plan(listId: string): Promise<DebloatPlan>
   /** Every package on the TV, to add one to a list by hand. */
