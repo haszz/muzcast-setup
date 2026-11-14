@@ -19,7 +19,7 @@ import * as tools from './toolchain'
 import { discover, stopDiscovery } from './discover'
 import { localSubnets, scan } from './scan'
 import { reconnect } from './reconnect'
-import { bootCheck } from './bootcheck'
+import { bootCheck, cancelBootCheck } from './bootcheck'
 import { check as checkUpdate, type UpdateCache } from './updates'
 import { autoConnect, forgetTv, listTvs, rememberTv, setThumb } from './tvlist'
 import * as web from './web'
@@ -134,6 +134,7 @@ const handlers: Omit<Handlers, 'onLog' | 'onProgress' | 'onStatus'> = {
   lastHost: async () => readSettings().lastHost ?? null,
   checkAdbClosed: (host) => system.adbClosed(host),
   bootCheck: () => bootCheck(),
+  cancelBootCheck: async () => cancelBootCheck(),
   checkUpdate: async () => {
     const s = readSettings()
     const { info, cache } = await checkUpdate(app.getVersion(), s.update ?? {})

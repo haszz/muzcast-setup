@@ -3,7 +3,7 @@ import type { CytvApi, ConnStatus, DownloadProgress, LogLine } from '@shared/api
 
 // Every method of CytvApi except the event hooks is a plain invoke on a channel of the same name.
 const methods = [
-  'tvDiagnostics', 'restoreOptimization', 'setMuzcastHome', 'telemetryStatus', 'telemetryPreference', 'muzcastStatus', 'installMuzcast', 'openMuzcast', 'scan', 'discover', 'stopDiscovery', 'connect', 'disconnect', 'status', 'lastHost', 'reconnect', 'checkAdbClosed', 'bootCheck', 'checkUpdate', 'pair',
+  'tvDiagnostics', 'restoreOptimization', 'setMuzcastHome', 'telemetryStatus', 'telemetryPreference', 'muzcastStatus', 'installMuzcast', 'openMuzcast', 'scan', 'discover', 'stopDiscovery', 'connect', 'disconnect', 'status', 'lastHost', 'reconnect', 'checkAdbClosed', 'bootCheck', 'cancelBootCheck', 'checkUpdate', 'pair',
   'bugReport', 'checks', 'download',
   'appMetadata', 'recoveryLists', 'lists', 'plan', 'tvPackages', 'applyDebloat', 'restore',
   'useStockLauncher', 'removeOldLauncher', 'homeStatus', 'installHome', 'useHome', 'homeApps', 'readHomeConfig', 'setRemoteButtons', 'setLockPin', 'setAppLock', 'clearAppLock', 'themePackBegin', 'themePackPut', 'themePackEnd', 'setSlides', 'fireplace', 'homeKeys', 'setHomeConfig', 'setHomeWallpaper', 'applyHomeTheme', 'themeBackup', 'restoreThemeBackup', 'forgetThemeBackup', 'saveHomeTheme',

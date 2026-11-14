@@ -9,6 +9,13 @@ import { rollback, stockOnTv } from './launcher'
 import type { BootCheckResult } from '@shared/api'
 
 const TASK = 'restart check'
+let activeCheck: AbortController | null = null
+
+export function cancelBootCheck(): void {
+  if (!activeCheck) return
+  activeCheck.abort()
+  T.disconnect()
+}
 
 export interface BootCheckDeps {
   /** Waits `ms`; tests skip the wait. */
@@ -30,35 +37,54 @@ const realDeps: BootCheckDeps = {
   })
 }
 
-async function until(deps: BootCheckDeps, ms: number, step: number, test: () => Promise<boolean>): Promise<boolean> {
+async function until(deps: BootCheckDeps, ms: number, step: number, test: () => Promise<boolean>, signal: AbortSignal): Promise<boolean> {
   for (let waited = 0; waited <= ms; waited += step) {
-    if (await test().catch(() => false)) return true
+    signal.throwIfAborted()
+    const passed = await test().catch(() => false)
+    signal.throwIfAborted()
+    if (passed) return true
     await deps.sleep(step)
   }
   return false
 }
 
 export async function bootCheck(deps: BootCheckDeps = realDeps): Promise<BootCheckResult> {
-  const target = T.getStatus().host
+  if (activeCheck) throw new Error("Une vérification est déjà en cours.")
+  const controller = new AbortController()
+  activeCheck = controller
+  try { return await performBootCheck(deps, controller.signal) }
+  catch (error) {
+    if (!controller.signal.aborted) throw error
+    return { ok: false, reconnected: false, summary: "Vérification automatique arrêtée. Confirmez l’accueil sur votre TV." }
+  } finally { if (activeCheck === controller) activeCheck = null }
+}
+
+async function performBootCheck(deps: BootCheckDeps, signal: AbortSignal): Promise<BootCheckResult> {
+  const previous = T.getStatus()
+  const target = previous.host
   if (!target) throw new Error('Connect to the TV first.')
   const [ip, p] = target.split(':')
   const port = Number(p) || 5555
 
   log(TASK, 'cmd', 'reboot')
-  await T.tv().shell('reboot').catch(() => '')
+  await T.tv().shell('reboot', 10000).catch(() => '')
+  signal.throwIfAborted()
   T.disconnect()
   // Give the TV time to go down before knocking, or the old session answers.
   await deps.sleep(15000)
-  const up = await until(deps, 240000, 5000, () => deps.portOpen(ip, port))
+  // A direct socket is not a valid reachability test when macOS requires our relay.
+  signal.throwIfAborted()
+  const up = previous.transport === 'relay' || await until(deps, 240000, 5000, () => deps.portOpen(ip, port), signal)
   if (!up || (await T.connect(target)).state !== 'connected') {
-    log(TASK, 'error', `${target} did not come back within 4 minutes`)
+    log(TASK, 'error', `${target}: automatic reconnection was not confirmed`)
     return {
       ok: false, reconnected: false,
-      summary: "The TV didn't come back on the network within 4 minutes, so the app couldn't check it.",
-      advice: 'Look at the TV. If the home screen is up, you are fine. If it is black, leave debugging on and connect again from Setup: the app can still put the stock launcher back. TVs that needed a pairing code close the port on restart, so pair again first.'
+      summary: "La connexion de configuration n’a pas été rétablie. Cela ne signifie pas que la TV n’a pas redémarré.",
+      advice: 'Si l’accueil s’affiche sur la TV, confirmez-le ci-dessous. Si l’écran reste noir, gardez le débogage activé et reconnectez la TV. Une TV associée par code peut nécessiter une nouvelle association après redémarrage.'
     }
   }
-  const booted = await until(deps, 120000, 3000, async () => (await T.tv().shell('getprop sys.boot_completed')).trim() === '1')
+  signal.throwIfAborted()
+  const booted = await until(deps, 120000, 3000, async () => (await T.tv().shell('getprop sys.boot_completed')).trim() === '1', signal)
   if (!booted) log(TASK, 'info', 'sys.boot_completed never turned 1; checking Home anyway')
 
   // Home must resolve to a real launcher, and that launcher must be running. Settings' FallbackHome
@@ -69,7 +95,8 @@ export async function bootCheck(deps: BootCheckDeps = realDeps): Promise<BootChe
     const pkg = seen.home?.split('/')[0]
     if (!pkg || NOT_LAUNCHERS.includes(pkg)) return false
     return (await T.tv().shell(`pidof ${pkg}`)).trim() !== ''
-  })
+  }, signal)
+  signal.throwIfAborted()
   const home = seen.home
   if (running) {
     log(TASK, 'ok', `The TV restarted and ${home} is running.`)
@@ -78,6 +105,7 @@ export async function bootCheck(deps: BootCheckDeps = realDeps): Promise<BootChe
 
   log(TASK, 'error', `After the restart Home is ${home ?? 'nothing'} and no launcher is running`)
   const { installed } = await T.packageSets()
+  signal.throwIfAborted()
   const stock = stockOnTv(installed)
   const fixed = stock ? await rollback(stock) : false
   return {

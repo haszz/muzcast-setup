@@ -199,6 +199,7 @@ export function installMock(): void {
     async checkUpdate() {
       return { current: '0.2.1', latest: '0.3.0', available: true, url: 'https://github.com/wingedpanther/cleanmytv/releases/tag/v0.3.0' }
     },
+    async cancelBootCheck() {},
     async bootCheck() {
       await wait(2500)
       return { ok: true, reconnected: true, summary: 'The TV restarted and its home screen came up (io.github.wingedpanther.cleanmytv.home).' }

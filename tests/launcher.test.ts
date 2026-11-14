@@ -14,7 +14,7 @@ import { bugReport } from '../src/main/report'
 import * as S from '../src/main/system'
 import * as Th from '../src/main/themes'
 import { BUILT_IN_THEMES, THEME_KEYS, parseTheme, themeFileName, themeToFile } from '../src/shared/themes'
-import { bootCheck } from '../src/main/bootcheck'
+import { bootCheck, cancelBootCheck } from '../src/main/bootcheck'
 import { FakeTv, newTv, startFakeAdbd } from './fake-adbd'
 
 const TV_COPY = '/data/local/tmp/cleanmytv-wallpaper.jpg'
@@ -361,6 +361,25 @@ describe('CleanMyTV Home', () => {
     expect(r).toMatchObject({ ok: true, reconnected: true })
     expect(tv.commands).toContain('reboot')
     expect(T.getStatus().state).toBe('connected')
+  })
+
+  it('reconnects through the normal transport even when direct port checks fail for a relay TV', async () => {
+    T.report({ ...T.getStatus(), transport: 'relay' })
+    let directProbes = 0
+    const result = await bootCheck({ sleep: async () => {}, portOpen: async () => { directProbes++; return false } })
+    expect(result.ok).toBe(true)
+    expect(directProbes).toBe(0)
+  })
+
+  it('stops waiting without reconnecting or changing Home when the user confirms the TV', async () => {
+    const homeBefore = tv.home
+    let probes = 0
+    const result = await bootCheck({ sleep: async () => { cancelBootCheck() }, portOpen: async () => { probes++; return true } })
+    expect(result.ok).toBe(false)
+    expect(probes).toBe(0)
+    expect(tv.home).toBe(homeBefore)
+    expect(T.getStatus().state).toBe('idle')
+    await T.connect(String(T.getStatus().host))
   })
 
   it('puts the stock launcher back when no home screen comes up after the restart', async () => {

@@ -477,6 +477,7 @@ export interface CytvApi {
   checkUpdate(): Promise<UpdateInfo>
   /** Restarts the TV, reconnects, and checks a home screen comes up; puts the stock launcher back if not. */
   bootCheck(): Promise<BootCheckResult>
+  cancelBootCheck(): Promise<void>
   /** Wireless-debugging pairing with Google's adb (downloaded on demand), then opens port 5555. */
   pair(host: string, pairPort: number, code: string, connectPort: number): Promise<ApplyResult>
 
