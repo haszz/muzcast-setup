@@ -11,6 +11,8 @@ files:
   - out/**
   - package.json
 extraResources:
+  - from: resources/dns-probe.dex
+    to: dns-probe.dex
   - from: resources/app-metadata.dex
     to: app-metadata.dex
   - from: resources/upstream

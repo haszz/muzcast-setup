@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { AppMetadata, DebloatEntry } from '@shared/api'
 import { appExplanation } from '@shared/cleanup'
-import { monogram } from '../lib/apps'
+import { Icon } from './Icon'
 
 const names: Record<string,string> = {
  'com.netflix.ninja':'Netflix', 'com.google.android.youtube.tv':'YouTube',
@@ -24,12 +24,11 @@ export function CleanupAppCard({entry,metadata,selected,disabled,onChange}:{entr
   <label className="mz-app-card-heading">
    <span className="mz-app-art" aria-hidden="true">{metadata?.icon&&!failed
     ? <img src={metadata.icon} alt="" width="56" height="56" onError={()=>setFailed(true)} />
-    : <span>{title==='Application à identifier'?'▦':monogram(title)}</span>}</span>
-   <span className="mz-app-name"><b>{title}</b><small>{metadata?.system?'Application système':metadata?'Application installée':'Présente sur votre TV'}</small></span>
+    : <Icon name="apps"/>}</span>
+   <span className="mz-app-name"><b>{title}</b><small>{selected?'À désactiver':'Conservée'}</small></span>
    <input type="checkbox" checked={selected} disabled={disabled} aria-label={`Sélectionner ${title} (${entry.pkg})`} onChange={event=>onChange(event.target.checked)} />
   </label>
-  <p>{description}</p>
-  <details><summary>Détails de l’application</summary><code>{entry.pkg}</code>{entry.note&&<p className="mz-community-note">Note du profil communautaire : {entry.note}</p>}</details>
-  <span className="mz-app-selection">{selected?'Sélectionnée pour désactivation':'Conservée sur votre TV'}</span>
+  {selected && <p className="mz-app-consequence">{description}</p>}
+  <details><summary>À quoi sert cette app ?</summary>{!selected&&<p>{description}</p>}<code>{entry.pkg}</code>{entry.note&&<p className="mz-community-note">Note du profil communautaire : {entry.note}</p>}</details>
  </article>
 }

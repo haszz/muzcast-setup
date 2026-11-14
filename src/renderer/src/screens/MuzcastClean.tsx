@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import { TvOptimization } from '../components/TvOptimization'
+import { Icon } from '../components/Icon'
 import { protectedApp } from '@shared/cleanup'
 import { CleanupAppCard, cleanupAppTitle } from '../components/CleanupAppCard'
 import { recommendedProfile } from '@shared/profile-match'
@@ -14,6 +16,17 @@ export function Clean({
   host: string
   probe?: Probe
 }) {
+  const [stage, setStage] = useState<number | null>(null)
+  const [reviewed, setReviewed] = useState<number[]>([])
+  const [summaries,setSummaries] = useState<Record<number,string>>({})
+  const stageHeading = useRef<HTMLHeadingElement>(null)
+  const stages = [
+    { title: 'Apps inutiles', description: 'Gardez ce qui vous sert.', icon: 'apps' as const },
+    { title: 'Espace et fluidité', description: 'Retrouvez une TV plus agréable.', icon: 'speed' as const },
+    { title: 'Publicités et confidentialité', description: 'Choisissez votre niveau de filtrage.', icon: 'shield' as const },
+  ]
+  useEffect(() => { setStage(null); setReviewed([]); setSummaries({}) }, [host])
+  useEffect(() => { stageHeading.current?.focus(); window.scrollTo({top:0,behavior:'instant'}) }, [stage])
   const [lists, setLists] = useState<DebloatListSummary[]>([]),
     [plan, setPlan] = useState<DebloatPlan | null>(null),
     [chosen, setChosen] = useState<string[]>([]),
@@ -58,7 +71,8 @@ export function Clean({
         if (!cancelled) setDetecting(false)
       }
     })()
-    return () => { cancelled = true }
+
+  return () => { cancelled = true }
   }, [host, probe?.model, probe?.device, probe?.product, probe?.release])
   useEffect(() => {
     let cancelled = false
@@ -91,55 +105,8 @@ export function Clean({
       setParentBusy(false)
     }
   }
-  return (
-    <>
-      <div className="mz-clean-intro">
-        <div>
-          <span className="mz-badge">UTILE · FACULTATIF</span>
-          <h2>
-            Moins d’apps inutiles.
-            <br />
-            Une TV plus sereine.
-          </h2>
-          <p>
-            Certaines TV embarquent des applications promotionnelles ou des
-            services que vous n’utilisez pas. Les désactiver peut réduire
-            l’encombrement et l’activité en arrière-plan. Le résultat dépend de
-            votre téléviseur.
-          </p>
-        </div>
-        <div className="mz-note">
-          <b>Désactiver, qu’est-ce que ça veut dire ?</b>
-          <p>
-            L’application reste sur la TV, mais ne fonctionne plus et disparaît
-            généralement de l’accueil. Cela ne libère pas nécessairement
-            beaucoup de stockage.
-          </p>
-          <b>Vous gardez la main</b>
-          <p>
-            Aucune application n’est cochée. Vous choisissez, puis vous
-            confirmez. Vous pourrez rétablir les modifications depuis cet
-            ordinateur ou les paramètres de la TV.
-          </p>
-        </div>
-      </div>
-      <div className="mz-action">
-        <div>
-          <strong>Installer Muzcast ne nécessite aucun nettoyage.</strong>
-          <p>Vous pouvez le faire maintenant, ou revenir plus tard.</p>
-        </div>
-        <button disabled={busy} onClick={onNext}>
-          Passer cette étape →
-        </button>
-      </div>
-      <section className="mz-panel">
-        <h2>Choisir ce que vous souhaitez alléger</h2>
-        <p>
-          Les profils sont fournis par la communauté CleanYourTV. Ils ne
-          garantissent pas la compatibilité de chaque application avec votre
-          modèle. En cas de doute, gardez-la activée.
-        </p>
-        <div className="mz-note" role="status">
+  const profileDetails = (<details className="mz-advanced" open={!plan ? true : undefined}><summary>{detecting?'Identification de votre TV…':automatic?'Profil détecté · '+(probe?.model||automatic.title):'Choisir le profil de votre TV'}</summary>
+        <div role="status">
           <b>{detecting ? 'Identification du profil…' : manual ? 'Profil choisi manuellement' : automatic ? 'Profil proposé automatiquement' : 'Votre téléviseur est identifié'}</b>
           {probe && <p>{probe.manufacturer} {probe.model} · Android {probe.release}{probe.device ? ` · Plateforme ${probe.device}` : ''}</p>}
           {!detecting && <p>{manual ? 'Vous avez choisi ce profil. Vérifiez les applications proposées avant de confirmer votre sélection.' : automatic
@@ -147,7 +114,6 @@ export function Clean({
               ? 'La référence annoncée par votre TV correspond à ce profil. Vous pouvez en choisir un autre.'
               : `Ce profil correspond à la plateforme ${probe?.device || 'détectée'}, partagée par plusieurs modèles. La référence commerciale exacte n’est pas confirmée.`
             : 'Aucun profil unique ne correspond aux informations annoncées par la TV. Choisissez un profil ci-dessous ou passez cette étape.'}</p>}
-          {!detecting && automatic && <p>Aucune application n’est sélectionnée pour être désactivée.</p>}
         </div>
         <label>
           Profil du téléviseur
@@ -176,6 +142,27 @@ export function Clean({
             ))}
           </select>
         </label>
+        </details> )
+  return (
+    <>
+      <div hidden={stage===null} className="mz-opt-progress" aria-label="Progression de l’optimisation">
+        {stages.map((item,index)=><button key={item.title} disabled={busy} aria-current={stage===index?'step':undefined} aria-label={`Étape ${index+1} : ${item.title}`} onClick={()=>setStage(index)}>
+          <Icon name={reviewed.includes(index)?'check':item.icon}/><span>{item.title}</span>
+        </button>)}
+      </div>
+      {stage===null && <section className="mz-panel mz-opt-overview">
+        <h2 ref={stageHeading} tabIndex={-1}>{reviewed.length===3?'Votre TV, selon vos choix.':'Optimisons votre TV ensemble.'}</h2>
+        <p>{reviewed.length===3?'Les trois étapes ont été examinées. Vous pouvez revoir vos choix.':'Trois étapes guidées. Vous décidez de chaque changement.'}</p>
+        <div className="mz-opt-tiles">{stages.map((item,index)=><button key={item.title} disabled={busy} aria-label={`Étape ${index+1} : ${item.title}`} onClick={()=>setStage(index)}>
+          <span className="mz-opt-symbol"><Icon name={item.icon}/></span><strong>{item.title}</strong><span>{reviewed.includes(index)?(summaries[index]||'Réglages conservés'):item.description}</span><small>{reviewed.includes(index)?'Choix examinés':'Étape '+(index+1)} <Icon name="right"/></small>
+        </button>)}</div>
+        <div className="mz-action"><span>{reviewed.length}/3 étapes examinées</span><button className="mz-primary" disabled={busy} onClick={()=>reviewed.length===3?onNext():setStage([0,1,2].find(n=>!reviewed.includes(n))??0)}>{reviewed.length===3?'En profiter':'Commencer'+(reviewed.length?' la suite':'')} <Icon name="right"/></button></div>
+      </section>}
+      {stage!==null && <div className="mz-opt-stage-heading"><button className="mz-link" disabled={busy} onClick={()=>setStage(null)}><Icon name="left"/> Vue d’ensemble</button><span>Étape {stage+1} sur 3</span><h2 ref={stageHeading} tabIndex={-1}>{stages[stage].title}</h2></div>}
+      <div hidden={stage!==0}>
+      <section className="mz-panel mz-app-selection-panel">
+
+        {!plan && profileDetails}
         {error && (
           <p role="alert" className="mz-error">
             {error}
@@ -188,21 +175,16 @@ export function Clean({
         )}
         {plan && (
           <>
-            <p className="mz-note">
-              L’accueil TV, la diffusion depuis le téléphone, la télécommande,
-              la voix et les services système sensibles sont exclus des choix
-              proposés.
-            </p>
-            <div className="mz-apps-toolbar">
-              <div><h3>Applications présentes sur votre TV</h3><p>{available.length} applications dans ce profil · {chosen.length} sélectionnées</p></div>
-              <label>Rechercher une application
-                <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Nom de l’application…" />
-              </label>
+            {!!plan.cameBack?.length && <div className="mz-note"><strong>{plan.cameBack.length} apps désactivées auparavant sont de nouveau actives.</strong><p>Cela peut arriver après une mise à jour de la TV. Retrouvez-les ci-dessous et choisissez à nouveau celles à désactiver.</p><ul>{plan.cameBack.map(pkg=><li key={pkg}>{cleanupAppTitle(pkg,metadata[pkg])}</li>)}</ul></div>}
+
+            <div className="mz-app-controls">
+              <div className="mz-app-filters">
+                <button type="button" aria-pressed={!onlySelected} onClick={()=>setOnlySelected(false)}>Toutes ({available.length})</button>
+                <button type="button" aria-pressed={onlySelected} onClick={()=>setOnlySelected(true)}>Sélection ({chosen.length})</button>
+              </div>
+              <label className="mz-search-compact"><Icon name="search"/><input aria-label="Rechercher une application" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Rechercher une app" /></label>
             </div>
-            <div className="mz-app-filters">
-              <button type="button" aria-pressed={!onlySelected} onClick={()=>setOnlySelected(false)}>Toutes ({available.length})</button>
-              <button type="button" aria-pressed={onlySelected} onClick={()=>setOnlySelected(true)}>Ma sélection ({chosen.length})</button>
-            </div>
+            <p className="mz-app-guidance">Sélectionnez seulement les apps que vous n’utilisez pas.</p>
             {readingApps && <p className="mz-app-read-status" role="status">Lecture des noms et icônes depuis votre TV…</p>}
             {appReadError && <p className="mz-app-read-status">La TV n’a pas fourni les noms et icônes. Les identifiants restent disponibles dans les détails.</p>}
             <div className="mz-app-grid">
@@ -281,6 +263,7 @@ export function Clean({
                             ...r.warnings,
                           ].join(' '),
                         )
+                        if(r.ok) setSummaries(current=>({...current,0:`${chosen.length} apps désactivées`} ))
                         setReview(false)
                         setChosen([])
                         setPlan(await window.cytv.plan(plan.listId))
@@ -296,10 +279,20 @@ export function Clean({
             )}
           </>
         )}
+        <div className="mz-app-secondary">
+          <p className="mz-app-read-status"><Icon name="shield"/> Services essentiels protégés · désactivation réversible</p>
+        <details className="mz-advanced"><summary>Comment ça marche ?</summary><p>Une app désactivée ne fonctionne plus. Son état initial est enregistré sur cet ordinateur avant modification. Les profils CleanYourTV servent de guide : en cas de doute, gardez l’app activée. Le gain de stockage ou de performances n’est pas garanti.</p></details>
+          {plan && profileDetails}
+        </div>
       </section>
-      <button disabled={busy} className="mz-link" onClick={onNext}>
-        Terminer la configuration →
-      </button>
+      </div>
+      <div hidden={stage!==1 && stage!==2}><TvOptimization onSummary={(category,summary)=>setSummaries(current=>({...current,[category==='privacy'?2:1]:summary}))} category={stage===2?'privacy':'performance'} host={host} setParentBusy={b=>{setBusy(b);setParentBusy(b)}} /></div>
+      {stage!==null && <div className="mz-action mz-opt-next">
+        <span>{stage===0&&chosen.length?'Une sélection reste à confirmer.': 'Vos réglages restent inchangés tant que vous ne les modifiez pas.'}</span>
+        <button disabled={busy} className="mz-primary" onClick={()=>{if(stage===0&&chosen.length){setReview(true);requestAnimationFrame(()=>document.querySelector('[aria-label="Confirmer le nettoyage"]')?.scrollIntoView({block:'center'}));return}setReviewed(current=>current.includes(stage)?current:[...current,stage]);setStage(stage<2?stage+1:null)}}>
+          {stage===0&&chosen.length?`Vérifier ${chosen.length} app${chosen.length>1?'s':''}`:stage===2?'Voir le récapitulatif':'Continuer'} <Icon name="right"/>
+        </button>
+      </div>}
     </>
   )
 }

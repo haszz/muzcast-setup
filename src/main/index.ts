@@ -1,3 +1,4 @@
+import { testFilteringDns } from './filtering-dns'
 import { revealWindow } from './window-lifecycle'
 import * as telemetry from './telemetry'
 import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
@@ -11,6 +12,7 @@ import * as debloat from './debloat'
 import { appMetadata } from './app-metadata'
 import * as launcher from './launcher'
 import * as system from './system'
+import * as optimization from './optimization'
 import * as sideload from './sideload'
 import * as muzcast from './muzcast'
 import * as tools from './toolchain'
@@ -86,8 +88,12 @@ async function checks(): Promise<CheckItem[]> {
 type Handlers = { [K in keyof CytvApi as CytvApi[K] extends (...a: never[]) => Promise<unknown> ? K : never]: CytvApi[K] }
 
 const handlers: Omit<Handlers, 'onLog' | 'onProgress' | 'onStatus'> = {
+  tvDiagnostics: () => optimization.diagnostics(),
+  restoreOptimization: () => optimization.restore(),
+  setMuzcastHome: () => muzcast.setHome(),
   telemetryStatus: async () => telemetry.status(),
   telemetryPreference: async (enabled,code) => telemetry.preference(enabled,code),
+  muzcastStatus: () => muzcast.inspect(),
   installMuzcast: (product) => muzcast.install(product),
   openMuzcast: (product) => muzcast.open(product),
   scan: () => scan(),
@@ -186,8 +192,9 @@ const handlers: Omit<Handlers, 'onLog' | 'onProgress' | 'onStatus'> = {
   }),
   webGet: (url) => web.get(String(url)),
   systemState: () => system.state(),
-  setPrivateDns: (host) => system.privateDns(host),
-  setAnimationScale: (s) => system.animationScale(s),
+  testFilteringDns,
+  setPrivateDns: (host) => optimization.dns(host),
+  setAnimationScale: (s) => optimization.animations(s),
   fixScreensaver: () => system.fixScreensaver(),
   sideloadInfo: (path) => sideload.inspect(String(path)),
   sideload: (path) => sideload.install(String(path)),

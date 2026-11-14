@@ -23,13 +23,13 @@ vi.mock('../src/main/muzcast-release', () => ({
   release: () => ({ url: 'apk', name: '1.0', versionCode: 29 }),
   verifyApk: mock.verify,
 }))
-import { install, open } from '../src/main/muzcast'
+import { install, open, inspect } from '../src/main/muzcast'
 beforeEach(() => {
   vi.resetAllMocks()
   mock.status.state = 'connected'
   mock.status.probe.sdk = 30
   mock.install.mockResolvedValue({ ok: true })
-  mock.shell.mockResolvedValue('versionCode=29 minSdk=26')
+  mock.shell.mockImplementation(async (cmd: string) => cmd === 'pm list packages' ? 'package:android' : 'versionCode=29 minSdk=26')
 })
 it('installs and verifies the version returned by the TV', async () => {
   await expect(install('muzcast')).resolves.toEqual({ version: '1.0' })
@@ -38,7 +38,7 @@ it('installs and verifies the version returned by the TV', async () => {
   expect(mock.shell).toHaveBeenCalledWith('dumpsys package co.muzcast.tv')
 })
 it('does not claim success when the installed version differs', async () => {
-  mock.shell.mockResolvedValue('versionCode=28 minSdk=26')
+  mock.shell.mockImplementation(async (cmd: string) => cmd === 'pm list packages' ? 'package:android' : 'versionCode=28 minSdk=26')
   await expect(install('muzcast')).rejects.toThrow('non confirmée')
 })
 it('rejects disconnected or incompatible TVs before installing', async () => {
@@ -98,4 +98,24 @@ it('does not confuse similarly named packages with an installed Muzcast app', as
   mock.shell.mockResolvedValueOnce('package:co.muzcast.tv.other\npackage:com.gathin.tvhome.other')
   await expect(open('auto')).rejects.toThrow('Aucune application Muzcast')
   expect(mock.shell).toHaveBeenCalledTimes(1)
+})
+
+it.each([
+  [null, 'install'], [28, 'update'], [29, 'current'], [30, 'newer'],
+])('compares installed version %s with the official version', async (code, state) => {
+  mock.shell.mockImplementation(async (cmd: string) => cmd === 'pm list packages'
+    ? code === null ? 'package:android' : 'package:co.muzcast.tv\npackage:com.gathin.tvhome'
+    : `versionCode=${code} minSdk=26\nversionName=test`)
+  expect((await inspect()).map(p => p.state)).toEqual([state, state])
+})
+it.each([29, 30])('does not reinstall or downgrade version %s', async code => {
+  mock.shell.mockImplementation(async (cmd: string) => cmd === 'pm list packages' ? 'package:co.muzcast.tv' : `versionCode=${code}\nversionName=existing`)
+  await expect(install('muzcast')).resolves.toEqual({version:'existing'})
+  expect(mock.install).not.toHaveBeenCalled()
+})
+it('does not mistake an unreadable package list for missing apps', async () => {
+  mock.shell.mockResolvedValue('Error: connection closed')
+  expect((await inspect()).every(p => p.state === 'unknown')).toBe(true)
+  await expect(install('muzcast')).rejects.toThrow('liste des applications')
+  expect(mock.install).not.toHaveBeenCalled()
 })

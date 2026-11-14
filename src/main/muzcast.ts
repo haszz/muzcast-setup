@@ -11,6 +11,39 @@ import {
   verifyApk,
   type Product,
 } from './muzcast-release'
+import type { MuzcastAppStatus } from '../shared/api'
+
+async function installedVersion(product: Product) {
+  const pkg = PRODUCTS[product].package
+  const packages = await T.tv().shell('pm list packages')
+  if (!/^package:/m.test(packages)) throw Error('La liste des applications n’a pas pu être lue. Réessayez la vérification.')
+  if (!packages.split(/\r?\n/).some(line => line.trim() === `package:${pkg}`)) return null
+  const details = await T.tv().shell(`dumpsys package ${pkg}`)
+  const code = /versionCode=(\d+)/.exec(details)?.[1]
+  if (!code || !Number.isSafeInteger(Number(code))) throw Error('La version installée n’a pas pu être lue. Réessayez la vérification.')
+  return { code: Number(code), name: /versionName=([^\r\n]+)/.exec(details)?.[1]?.trim() || code }
+}
+
+export async function inspect(): Promise<MuzcastAppStatus[]> {
+  const host = T.getStatus().host
+  if (T.getStatus().state !== 'connected') throw Error('Connectez votre TV pour vérifier ses applications.')
+  const result: MuzcastAppStatus[] = []
+  for (const product of Object.keys(PRODUCTS) as Product[]) {
+    let installed: Awaited<ReturnType<typeof installedVersion>> = null
+    try {
+      installed = await installedVersion(product)
+      const latest = release(product, JSON.parse((await download(PRODUCTS[product].manifest, 1024 * 1024)).toString()))
+      result.push({product, installedVersion: installed?.name, latestVersion: latest.name,
+        state: !installed ? 'install' : installed.code < latest.versionCode ? 'update' : installed.code === latest.versionCode ? 'current' : 'newer'})
+    } catch {
+      result.push({product, state:'unknown', installedVersion: installed?.name,
+        error:'Vérification impossible. Vérifiez la connexion Internet et celle de la TV, puis réessayez.'})
+    }
+  }
+  if (T.getStatus().host !== host || T.getStatus().state !== 'connected') throw Error('La connexion à la TV a changé. Reconnectez-la.')
+  return result
+}
+
 let busy = false
 export async function install(product: Product): Promise<{ version: string }> {
   if (!Object.hasOwn(PRODUCTS, product)) throw Error('Application inconnue.')
@@ -34,6 +67,9 @@ export async function install(product: Product): Promise<{ version: string }> {
         (await download(PRODUCTS[product].manifest, 1024 * 1024)).toString(),
       ),
     )
+    // Recheck immediately before installing: never reinstall or downgrade a newer TV app.
+    const existing = await installedVersion(product)
+    if (existing && existing.code >= m.versionCode) return { version: existing.name }
     const data = await download(m.url, undefined, undefined, (received,total) => progress({tool:"sideload",received,total,phase:"download",message:"Téléchargement de la version officielle"}))
     progress({tool:"sideload",received:0,total:0,phase:"verify",message:"Vérification de l’intégrité et de la version du fichier"})
     verifyApk(product, data, m)
@@ -104,4 +140,21 @@ export async function open(product: Product | 'auto' = 'auto'): Promise<void> {
   )
   if (/Error|Exception|unable|not found/i.test(result) || !/Status:\s*ok/i.test(result))
     throw Error(`Impossible d’ouvrir ${app.name}. Sur la TV, ouvrez Applications → ${app.name}. Pour une ancienne version du launcher, cherchez aussi « Accueil ».`)
+}
+
+/** Set the existing launcher as Home without disabling the manufacturer's launcher. */
+export async function setHome(): Promise<import('@shared/api').ApplyResult> {
+  if (T.getStatus().state !== 'connected') throw Error('Connectez la TV avant de continuer.')
+  const component='com.gathin.tvhome/.MainActivity'
+  const claims=await T.tv().shell(T.HOME_CLAIMS)
+  if (!claims.split('\n').some(line=>['com.gathin.tvhome/.MainActivity','com.gathin.tvhome/com.gathin.tvhome.MainActivity'].includes(line.trim()))) throw Error('Muzcast Launcher ne propose pas d’accueil sur cette TV. Vérifiez son installation.')
+  const previous=await T.homeComponent()
+  await T.tv().shell(`cmd package set-home-activity ${component}`)
+  const selected=await T.homeComponent()
+  if (!selected?.startsWith('com.gathin.tvhome/')) {
+    if(previous && !previous.startsWith('android/')) await T.tv().shell(`cmd package set-home-activity ${previous}`).catch(()=>{})
+    return {ok:false,summary:'Cette TV demande de choisir l’accueil dans ses paramètres : Applications → Applications par défaut → Accueil.',warnings:[]}
+  }
+  await open('launcher')
+  return {ok:true,summary:'Muzcast Launcher est maintenant votre accueil. L’accueil constructeur reste disponible dans les paramètres.',warnings:[]}
 }

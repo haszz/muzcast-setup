@@ -28,3 +28,5 @@ native/relay/python/__pycache__/
 .metadata-build/
 
 .release-python/
+
+.dns-probe-build/

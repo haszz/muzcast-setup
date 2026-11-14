@@ -1,0 +1,13 @@
+import {execFileSync} from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+const sdk=process.env.ANDROID_HOME;
+const java=process.env.JAVA_HOME;
+if(!sdk||!java)throw Error('Set ANDROID_HOME and JAVA_HOME (JDK 17+) to rebuild the read-only metadata helper.');
+const build='.dns-probe-build';
+fs.mkdirSync(build+'/classes',{recursive:true});fs.mkdirSync(build+'/dex',{recursive:true});
+const platform=fs.readdirSync(path.join(sdk,'platforms')).filter(x=>/^android-\d+$/.test(x)).sort((a,b)=>Number(a.slice(8))-Number(b.slice(8))).at(-1);
+const tools=fs.readdirSync(path.join(sdk,'build-tools')).filter(x=>/^\d+\.\d+\.\d+$/.test(x)).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})).at(-1);
+execFileSync(path.join(java,'bin/javac'),['--release','8','-classpath',path.join(sdk,'platforms',platform,'android.jar'),'-d',build+'/classes','native/dns-probe/DnsProbe.java'],{stdio:'inherit'});
+execFileSync(path.join(sdk,'build-tools',tools,'d8'),['--min-api','23','--output',build+'/dex',build+'/classes/co/muzcast/setup/DnsProbe.class'],{stdio:'inherit',env:{...process.env,JAVA_HOME:java}});
+fs.copyFileSync(build+'/dex/classes.dex','resources/dns-probe.dex');

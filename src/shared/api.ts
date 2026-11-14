@@ -425,7 +425,31 @@ export interface WebResponse {
   base64: string
 }
 
+export interface MuzcastAppStatus {
+  product: 'launcher' | 'muzcast'
+  state: 'install' | 'update' | 'current' | 'newer' | 'unknown'
+  installedVersion?: string
+  latestVersion?: string
+  error?: string
+}
+
+export interface TvDiagnostics {
+  findings: {pkg:string;evidence:string}[]
+  roundTripMs:number
+  memoryAvailableKb:number|null
+  home:string|null
+  frames:string[]
+  warnings:string[]
+  measuredAt:string
+}
+
 export interface CytvApi {
+  tvDiagnostics():Promise<TvDiagnostics>
+  restoreOptimization():Promise<ApplyResult>
+  setMuzcastHome():Promise<ApplyResult>
+
+  muzcastStatus(): Promise<MuzcastAppStatus[]>
+
   telemetryStatus(): Promise<{enabled:boolean|null;pendingLink:boolean;linked:boolean}>
   telemetryPreference(enabled:boolean,code?:string): Promise<{enabled:boolean|null;pendingLink:boolean;linked:boolean}>
 
@@ -536,6 +560,7 @@ export interface CytvApi {
 
   // TV extras
   systemState(): Promise<SystemState>
+  testFilteringDns(): Promise<DnsCandidate[]>
   setPrivateDns(host: string | null): Promise<ApplyResult>
   setAnimationScale(scale: number): Promise<ApplyResult>
   /** Switches Google's Ambient screensaver apps back on and makes it the screensaver (#57). */
@@ -562,3 +587,5 @@ declare global {
     cytv: CytvApi
   }
 }
+
+export interface DnsCandidate {name:string;host:string;ok:boolean;stage:string;elapsedMs:number;detail:string}

@@ -7,12 +7,17 @@ import type {
   HomeStatus,
   KnownTv,
   DownloadProgress,
+  MuzcastAppStatus,
 } from '@shared/api'
+import { TvFinishChecks } from './components/TvFinishChecks'
 import { Clean } from './screens/MuzcastClean'
 import logo from './assets/logo.svg'
 import launcher from './assets/launcher.webp'
 import accueil from './assets/accueil.webp'
 import './muzcast.css'
+import './journey.css'
+import { Icon } from './components/Icon'
+import { TvPreparation } from './components/TvPreparation'
 import {InstallExperience} from './components/InstallExperience'
 // Kept for the upstream screens, which remain available to maintainers.
 export type StepId =
@@ -35,14 +40,14 @@ type Product = 'launcher' | 'muzcast'
 const products = [
   {
     id: 'launcher' as Product,
-    name: 'Muzcast TV',
+    name: 'Muzcast Launcher',
     role: 'Un nouvel accueil pour votre TV',
     image: launcher,
     text: 'Vos applications, vos horaires de prière et un univers qui vous ressemble.',
   },
   {
     id: 'muzcast' as Product,
-    name: 'Muzcast',
+    name: 'Muzcast app',
     role: 'Des récits à vivre en grand',
     image: accueil,
     text: 'Le catalogue audio, les transcriptions, Muzcast AI Lens et l’adhan complet.',
@@ -50,23 +55,26 @@ const products = [
 ]
 const labels = [
   'Connecter ma TV',
-  'Installer Muzcast',
-  'Alléger ma TV',
+  'Installer Muzcast TV',
+  'Optimiser ma TV',
   'En profiter',
 ]
-function Icon({name}:{name:'tv'|'download'|'sparkles'|'play'|'wifi'|'check'|'shield'|'help'|'info'|'arrow'}) {
- const paths={help:<><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4M12 16.5v.1"/></>,info:<><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v.1"/></>,arrow:<path d="M7 17 17 7M7 7h10v10"/>,tv:<><rect x="3" y="4" width="18" height="13" rx="3"/><path d="M8 21h8M12 17v4"/></>,download:<><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></>,sparkles:<><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/></>,play:<path d="m8 5 11 7-11 7Z"/>,wifi:<><path d="M3 8a15 15 0 0 1 18 0M6 12a10 10 0 0 1 12 0m-9 4a5 5 0 0 1 6 0"/><circle cx="12" cy="20" r=".6"/></>,check:<path d="m5 12 4 4L19 6"/>,shield:<><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Z"/><path d="m8 12 3 3 5-6"/></>}
- return <svg className="mz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
-}
-export default function App() {
+export default function App({ previewStep = 0 }: { previewStep?: number }) {
   const [measurement,setMeasurement]=useState<{enabled:boolean|null;pendingLink:boolean;linked:boolean}|null>(null)
   const [measureOpen,setMeasureOpen]=useState(false),[linkCode,setLinkCode]=useState(''),[measureError,setMeasureError]=useState('')
   useEffect(()=>{if(!window.cytv.telemetryStatus)return;const check=()=>window.cytv.telemetryStatus().then(s=>{setMeasurement(s);if(s.enabled===null||s.pendingLink)setMeasureOpen(true)});void check();const timer=setInterval(check,1500);return()=>clearInterval(timer)},[])
   async function measurementChoice(enabled:boolean){try{setMeasurement(await window.cytv.telemetryPreference(enabled,linkCode));setMeasureOpen(false);setLinkCode('');setMeasureError('')}catch{setMeasureError('Code invalide ou expiré. Recopiez le code du site.')}}
   const about = useRef<HTMLDialogElement>(null)
+  const mainTitle = useRef<HTMLHeadingElement>(null)
+  const [prepared, setPrepared] = useState(false)
+  const [appStatus, setAppStatus] = useState<MuzcastAppStatus[] | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [checkError, setCheckError] = useState('')
+  const checkGeneration = useRef(0)
   const [searchElapsed,setSearchElapsed]=useState(false)
-  useEffect(()=>{const timer=setTimeout(()=>setSearchElapsed(true),8000);return()=>clearTimeout(timer)},[])
-  const [step, setStep] = useState(0),
+  useEffect(()=>{setSearchElapsed(false);if(!prepared)return;const timer=setTimeout(()=>setSearchElapsed(true),8000);return()=>clearTimeout(timer)},[prepared])
+  const [furthestStep, setFurthestStep] = useState(previewStep)
+  const [step, setStep] = useState(previewStep),
     [status, setStatus] = useState<ConnStatus>({ state: 'idle' })
   const [found, setFound] = useState<FoundTv[]>([]),
     [host, setHost] = useState(''),
@@ -85,6 +93,7 @@ export default function App() {
     setInstalled({})
     setError('')
   }, [status.host])
+  useEffect(() => { setFurthestStep(s => Math.max(s, step)); mainTitle.current?.focus({preventScroll:true}); window.scrollTo({top:0,behavior:'instant'}) }, [step])
   const connected = status.state === 'connected'
   const demo = !navigator.userAgent.includes('Electron')
   useEffect(() => {
@@ -97,7 +106,7 @@ export default function App() {
     }
   }, [])
   useEffect(() => {
-    if (connected || busy || step !== 0) return
+    if (!prepared || connected || busy || step !== 0) return
     let live = true
     const discover = () =>
       window.cytv.discover().then(
@@ -113,7 +122,26 @@ export default function App() {
       clearInterval(id)
       void window.cytv.stopDiscovery()
     }
-  }, [connected, busy, step])
+  }, [prepared, connected, busy, step])
+  async function checkApps() {
+    const generation = ++checkGeneration.current
+    setChecking(true); setCheckError(''); setAppStatus(null)
+    try {
+      const result = await window.cytv.muzcastStatus()
+      if (generation === checkGeneration.current) setAppStatus(result)
+    } catch { if (generation === checkGeneration.current) setCheckError('Impossible de vérifier vos applications. Réessayez lorsque la TV et Internet sont accessibles.') }
+    finally { if (generation === checkGeneration.current) setChecking(false) }
+  }
+  useEffect(() => {
+    setAppStatus(null); setInstalled({})
+    if (connected) void checkApps()
+    else { ++checkGeneration.current; setChecking(false) }
+    return () => { ++checkGeneration.current }
+  }, [connected, status.host])
+  const selectedStatus = appStatus?.filter(p => selected.includes(p.product)) || []
+  const ready = !checking && selected.length > 0 && selectedStatus.length === selected.length && selectedStatus.every(p => p.state !== 'unknown')
+  const needsInstall = selectedStatus.some(p => p.state === 'install')
+  const needsUpdate = selectedStatus.some(p => p.state === 'update')
   async function run(action: () => Promise<void>) {
     setBusy(true)
     setError('')
@@ -138,9 +166,10 @@ export default function App() {
     })
   }
   async function install() {
+    if (!ready) return
     await run(async () => {
       for (const p of selected) {
-        if (installed[p]) continue
+        if (installed[p] || selectedStatus.some(a => a.product === p && (a.state === 'current' || a.state === 'newer'))) continue
         setActive(p)
         setProgress(null)
         const r = await window.cytv.installMuzcast(p)
@@ -152,17 +181,17 @@ export default function App() {
     setActive(null)
   }
   return (
-    <div className="mz-app">
-      {measureOpen&&measurement&&<section className="mz-measure" aria-label="Mesure d’usage"><h2>Nous aider à améliorer l’installation ?</h2><p>Avec votre accord : étapes, réussites et erreurs, sans adresse de TV, code d’association, contenu saisi ni enregistrement d’écran.</p>{measurement.pendingLink&&<p><strong>Un parcours du site a été retrouvé.</strong> Accepter le reliera à cet assistant. Refuser permet de continuer sans suivi.</p>}<label>Code du site (facultatif)<input value={linkCode} onChange={e=>setLinkCode(e.target.value)} placeholder="MTV1.…" /></label><p role="status">{measureError}</p><div><button onClick={()=>void measurementChoice(true)}>Accepter{measurement.pendingLink||linkCode?' et relier':''}</button><button onClick={()=>void measurementChoice(false)}>Refuser</button>{measurement.enabled!==null&&!measurement.pendingLink&&<button onClick={()=>setMeasureOpen(false)}>Fermer</button>}</div><a href="https://tv.muzcast.co/confidentialite/" target="_blank" rel="noreferrer">Confidentialité ↗</a></section>}
+    <div className="mz-app mz-journey">
+      {measureOpen&&measurement&&<section className="mz-measure" aria-label="Mesure d’usage"><h2>Nous aider à améliorer l’installation ?</h2><p>Avec votre accord : étapes, réussites et erreurs, sans adresse de TV, code d’association, contenu saisi ni enregistrement d’écran.</p>{measurement.pendingLink&&<p><strong>Un parcours du site a été retrouvé.</strong> Accepter le reliera à cet assistant. Refuser permet de continuer sans suivi.</p>}<label>Code du site (facultatif)<input value={linkCode} onChange={e=>setLinkCode(e.target.value)} placeholder="MTV1.…" /></label><p role="status">{measureError}</p><div><button onClick={()=>void measurementChoice(true)}>Accepter{measurement.pendingLink||linkCode?' et relier':''}</button><button onClick={()=>void measurementChoice(false)}>Refuser</button>{measurement.enabled!==null&&!measurement.pendingLink&&<button onClick={()=>setMeasureOpen(false)}>Fermer</button>}</div><a href="https://tv.muzcast.co/confidentialite/" target="_blank" rel="noreferrer">Confidentialité <Icon name="arrow"/></a></section>}
 
       <dialog ref={about} className="mz-about" aria-labelledby="about-title">
-        <form method="dialog"><button aria-label="Fermer À propos">Fermer ×</button></form>
+        <form method="dialog"><button aria-label="Fermer À propos">Fermer <Icon name="close"/></button></form>
         <span className="mz-eyebrow">À PROPOS</span>
         <h2 id="about-title">Muzcast à la maison</h2>
         <button onClick={()=>{about.current?.close();setMeasureOpen(true)}}>Mesure d’usage</button><p>Version {version} · Votre univers Muzcast sur grand écran.</p>
         <p>Fondé sur <a href="https://github.com/wingedpanther/cleanmytv" target="_blank" rel="noreferrer">CleanMyTV</a>, sous licence MIT. Les profils communautaires de nettoyage proviennent de CleanYourTV.</p>
         <details><summary>Crédits et licence MIT</summary><pre>{license}</pre></details>
-        <p><a href="https://github.com/haszz/muzcast-setup" target="_blank" rel="noreferrer">Code source du projet ↗</a></p>
+        <p><a href="https://github.com/haszz/muzcast-setup" target="_blank" rel="noreferrer">Code source du projet <Icon name="arrow"/></a></p>
       </dialog>
       <aside className="mz-sidebar">
         <img className="mz-logo" src={logo} alt="Muzcast" />
@@ -176,18 +205,18 @@ export default function App() {
           {labels.map((l, i) => (
             <button
               key={l}
-              disabled={busy || (i > 0 && !connected)}
-              className={step === i ? 'current' : ''}
+              disabled={busy || (i > 0 && !connected) || i > Math.max(furthestStep, connected ? 1 : 0)}
+              className={step === i ? 'current' : i < step ? 'complete' : ''}
               onClick={() => {
                 setError('')
                 setStep(i)
               }}
               aria-current={step === i ? 'step' : undefined}
             >
-              <span className="mz-nav-icon"><Icon name={(['tv','download','sparkles','play'] as const)[i]}/></span>
+              <span className="mz-nav-icon"><Icon name={i < step ? 'check' : (['tv','download','clean','play'] as const)[i]}/></span>
               <div>
                 {l}
-                {i === 2 && <small>Un vrai plus · facultatif</small>}
+                <small>{['Préparer et connecter', 'Installer ou mettre à jour', 'Apps, fluidité et confidentialité', 'Ouvrir sur grand écran'][i]}</small>
               </div>
             </button>
           ))}
@@ -220,12 +249,12 @@ export default function App() {
         )}
         <header className="mz-header">
           <div className="mz-header-meta"><span className="mz-eyebrow">BIENVENUE CHEZ VOUS</span><span className="mz-step-count">Étape {step + 1} sur 4</span></div>
-          <h1>
+          <h1 ref={mainTitle} tabIndex={-1}>
             {
               [
-                'Installons Muzcast sur votre TV.',
-                active ? 'Votre TV se prépare.' : 'Tout Muzcast sur votre TV.',
-                'Faites de la place à l’essentiel.',
+                'Installons Muzcast TV.',
+                active ? 'Votre TV se prépare.' : 'Muzcast TV, prêt pour vous.',
+                'Votre TV peut faire mieux.',
                 'Votre TV, à votre image.',
               ][step]
             }
@@ -235,7 +264,7 @@ export default function App() {
               [
                 'Quelques minutes pour réunir vos récits, vos prières et vos applications préférées.',
                 active ? 'Suivez l’installation et découvrez votre nouvel univers Muzcast.' : 'Votre nouvel accueil et tous vos récits, réunis en une installation.',
-                'Une étape utile pour réduire les applications inutiles, à votre rythme.',
+                'Réglez l’essentiel, étape par étape.',
                 'Retrouvez Muzcast dans les applications de votre téléviseur.',
               ][step]
             }
@@ -246,31 +275,10 @@ export default function App() {
             {error}
           </div>
         )}
-        {step === 0 && (
+        {step === 0 && !prepared && !connected && <TvPreparation onReady={() => setPrepared(true)} />}
+        {step === 0 && (prepared || connected) && (
           <div className="mz-connection-layout">
-            <div className="mz-instructions"><h2>Préparez votre TV</h2><p className="mz-guide-intro">Prenez votre télécommande, on vous guide.</p>
-              <div>
-                <span className="mz-instruction-number">1</span><b>Le même réseau</b>
-                <p>
-                  Allumez votre TV et connectez-la au même Wi-Fi ou réseau que
-                  cet ordinateur.
-                </p>
-              </div>
-              <div>
-                <span className="mz-instruction-number">2</span><b>Autorisez la connexion</b>
-                <p>
-                  Dans Paramètres → À propos, appuyez 7 fois sur « Build ». Dans
-                  Options développeur, activez le débogage USB ou sans fil.
-                </p>
-              </div>
-              <div>
-                <span className="mz-instruction-number">3</span><b>Confirmez sur votre TV</b>
-                <p>
-                  Choisissez votre TV dans la liste, puis « Autoriser » sur son
-                  écran.
-                </p>
-              </div>
-            </div>
+            <div className="mz-instructions"><h2>Votre TV est prête à être détectée</h2><p>Gardez-la allumée, sur le même réseau que cet ordinateur.</p><div className="mz-note"><b>La prochaine étape se passe sur la TV</b><p>Sélectionnez votre téléviseur ci-contre. S’il demande « Autoriser le débogage USB », choisissez Autoriser avec votre télécommande.</p><p>Sur Mac, une demande d’accès au réseau local peut aussi apparaître.</p></div>{!connected && <button onClick={() => setPrepared(false)}><Icon name="left"/> Revoir la préparation</button>}</div>
             <section className="mz-panel mz-connect-panel">
               <div className="mz-discovery-top"><span className="mz-device-icon"><Icon name={connected?'check':'tv'}/></span><span className="mz-detection"><span className={'mz-dot '+(connected?'online':'')}/>{connected?(status.transport === 'relay' ? 'TV connectée · connexion de secours' : 'TV connectée'):'Détection automatique'}</span></div>
               <h2>
@@ -283,7 +291,7 @@ export default function App() {
                     {status.probe?.release}
                   </p>
                   <button className="mz-primary" onClick={() => setStep(1)}>
-                    Continuer →
+                    Continuer <Icon name="right"/>
                   </button>
                 </>
               ) : (
@@ -302,14 +310,14 @@ export default function App() {
                       }}
                     >
                       <Icon name="tv"/> <div className="mz-device-identity"><strong>{t.name || 'Téléviseur détecté sur votre réseau'}</strong><small>Adresse sur votre réseau : {t.host}</small></div>
-                      <span>{failedConnection === t.host.split(':')[0] ? 'Réessayer →' : t.ready || t.adbPort ? 'Connecter cette TV →' : 'Associer cette TV →'}</span>
+                      <span>{failedConnection === t.host.split(':')[0] ? 'Réessayer' : t.ready || t.adbPort ? 'Connecter cette TV' : 'Associer cette TV'} <Icon name="right"/></span>
                     </button>
                   ))}
                   {!found.length && (
                     <div className="mz-discovery-state" role="status"><span className="mz-search-indicator"/><div><strong>{searchElapsed?'Aucune TV détectée pour le moment':'Recherche de votre téléviseur…'}</strong><p>Gardez votre TV allumée, sur le même réseau. Elle apparaîtra ici dès qu’elle sera détectée.</p></div></div>
                   )}
                   <details>
-                    <summary><Icon name="wifi"/> Ma TV n’apparaît pas <span>＋</span></summary>
+                    <summary><Icon name="wifi"/> Ma TV n’apparaît pas <span><Icon name="plus"/></span></summary>
                     <p>
                       L’adresse IP se trouve dans Paramètres → Réseau sur la TV.
                     </p>
@@ -433,15 +441,18 @@ export default function App() {
                     </span>
                     <h2>{p.name}</h2>
                     <p>{p.text}</p>
-                    {installed[p.id] && (
-                      <strong className="mz-success">
-                        ✓ Installée · {installed[p.id]}
-                      </strong>
-                    )}
+                    <div className={"mz-app-status state-" + (installed[p.id] ? "current" : appStatus?.find(a => a.product === p.id)?.state || "checking")} role="status">
+                      {installed[p.id] ? <strong className="mz-success"><Icon name="check"/> Prête · {installed[p.id]}</strong> : checking ? 'Vérification des versions…' : (() => {
+                        const info = appStatus?.find(a => a.product === p.id)
+                        if (!info) return 'Version non vérifiée'
+                        return <><strong className="mz-version-badge">{({install:'À installer',update:'Mise à jour disponible',current:'Déjà à jour',newer:'Version plus récente déjà installée',unknown:'Vérification à réessayer'})[info.state]}</strong>{info.installedVersion && <small>Sur la TV : {info.installedVersion}</small>}{info.latestVersion && <small>Version disponible : {info.latestVersion}</small>}</>
+                      })()}
+                    </div>
                   </div>
                 </article>
               ))}
             </div>}
+            {!active && (checkError || appStatus?.some(p => p.state === 'unknown')) && <div className="mz-note" role="status"><p>{checkError || 'Certaines versions n’ont pas pu être vérifiées. Aucune réinstallation ne sera lancée sans vérification.'}</p><button disabled={checking || busy || !connected} onClick={() => void checkApps()}>Réessayer la vérification</button></div>}
             {!active && <details className="mz-advanced">
               <summary>Options avancées</summary>
               <p>Les deux applications sont incluses par défaut. Décochez uniquement celle que vous ne souhaitez pas installer. Cela ne désinstalle aucune application déjà présente.</p>
@@ -452,21 +463,17 @@ export default function App() {
               </label>)}</div>
               {!selected.length && <p role="status">Sélectionnez au moins une application pour continuer.</p>}
             </details>}
-            {!active && <div className="mz-action">
+            {!active && <div className="mz-action mz-install-action">
               <div>
-                <strong>{selected.length === 2 ? "Muzcast TV et Muzcast, inclus" : selected.length === 1 ? `${products.find(p => p.id === selected[0])!.name} uniquement` : "Aucune application sélectionnée"}</strong>
+                <strong>{selected.length === 2 ? "Muzcast TV · les deux applications incluses" : selected.length === 1 ? `${products.find(p => p.id === selected[0])!.name} uniquement` : "Aucune application sélectionnée"}</strong>
                 <p>Vos applications actuelles restent en place. Les fichiers sont vérifiés avant installation.</p>
               </div>
               <button
                 className="mz-primary"
-                disabled={busy || !selected.length || !connected}
+                disabled={busy || !ready || !connected}
                 onClick={() => void install()}
               >
-                {busy
-                  ? 'Installation en cours…'
-                  : selected.every((p) => installed[p])
-                    ? 'Continuer →'
-                    : 'Installer Muzcast →'}
+                {checking ? 'Vérification des applications…' : busy ? 'Installation en cours…' : selected.every(p => installed[p]) || (ready && !needsInstall && !needsUpdate) ? 'Continuer' : needsInstall && needsUpdate ? 'Installer et mettre à jour' : needsUpdate ? 'Mettre à jour Muzcast TV' : 'Installer Muzcast TV'} <Icon name={checking || busy ? 'refresh' : ready && !needsInstall && !needsUpdate ? 'right' : 'download'}/>
               </button>
             </div>}
           </>
@@ -488,22 +495,11 @@ export default function App() {
               onClick={() => void run(() => window.cytv.openMuzcast('auto'))}>
               <Icon name="play" /> {busy ? 'Ouverture en cours…' : 'Ouvrir sur la TV'}
             </button>
-            <p className="mz-open-hint">L’accueil Muzcast TV s’ouvre s’il est installé. Sinon, l’application Muzcast s’ouvre directement.</p>
+            <p className="mz-open-hint">Muzcast Launcher s’ouvre s’il est installé. Sinon, Muzcast app s’ouvre directement.</p>
             <img className="mz-finish-preview" src={selected.includes('launcher') ? launcher : accueil} alt="Votre univers Muzcast sur la TV" />
-            <div className="mz-note">
-              <b>Retrouver Muzcast TV avec le bouton Accueil</b>
-              <p>Dans les paramètres de votre TV, ouvrez Applications → Applications par défaut → Application d’accueil, puis choisissez Muzcast TV, si ce réglage est proposé. Les intitulés varient selon le téléviseur.</p>
-            </div>
-            <div className="mz-note">
-              <b>Une dernière chose</b>
-              <p>
-                Une fois terminé, vous pouvez désactiver le débogage dans les
-                paramètres de la TV. Les mises à jour restent accessibles
-                directement dans les apps.
-              </p>
-            </div>
+            <TvFinishChecks status={status} setParentBusy={setBusy} />
             <a href="https://tv.muzcast.co" target="_blank" rel="noreferrer">
-              Découvrir toutes les fonctionnalités →
+              Découvrir toutes les fonctionnalités <Icon name="right"/>
             </a>
           </section>
         )}

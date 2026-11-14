@@ -139,6 +139,10 @@ export function installMock(): void {
     platform: 'darwin',
     telemetryStatus: async()=>({enabled:false,pendingLink:false,linked:false}),
     telemetryPreference: async(enabled)=>({enabled,pendingLink:false,linked:false}),
+    muzcastStatus: async () => [
+      {product:'launcher',state:'update',installedVersion:'3.4',latestVersion:'3.5'},
+      {product:'muzcast',state:'install',latestVersion:'0.20'},
+    ],
     installMuzcast: async () => {
       for(const phase of ['download','transfer','verify','install'] as const){
         for(let i=0;i<=20;i++){
@@ -421,9 +425,13 @@ export function installMock(): void {
       const results = [{ name: 'Dublin', admin1: 'Leinster', country: 'Ireland', latitude: 53.3331, longitude: -6.2489 }, { name: 'Dublin', admin1: 'Ohio', country: 'United States', latitude: 40.0992, longitude: -83.1141 }]
       return { status: 200, contentType: 'application/json', base64: btoa(JSON.stringify({ results })) }
     },
+    async tvDiagnostics() { return {findings:[{pkg:'com.google.android.katniss',evidence:'Déclaré comme assistant vocal dans les réglages de la TV.'}],roundTripMs:24,memoryAvailableKb:780000,home:'com.gathin.tvhome/.MainActivity',frames:['Total frames rendered: 231','Janky frames: 2 (0.87%)'],warnings:[],measuredAt:new Date().toISOString()} },
+    async restoreOptimization() { return {ok:true,summary:'Réglages initiaux rétablis.',warnings:[]} },
+    async setMuzcastHome() { return {ok:true,summary:'Muzcast Launcher est maintenant votre accueil.',warnings:[]} },
     async systemState() {
       return { ...sys }
     },
+    async testFilteringDns() { return [{name:'AdGuard',host:'dns.adguard-dns.com',ok:false,stage:'tcp',elapsedMs:3000,detail:'Le serveur ne répond pas sur le port du DNS chiffré (853).'},{name:'DNS Forge',host:'dnsforge.de',ok:true,stage:'complete',elapsedMs:220,detail:'Connexion chiffrée et réponse DNS vérifiées depuis la TV.'}] },
     async setPrivateDns(host) {
       sys.privateDnsMode = host ? 'hostname' : 'opportunistic'
       sys.privateDnsHost = host ?? ''

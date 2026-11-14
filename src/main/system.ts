@@ -32,22 +32,7 @@ export async function clearCaches(): Promise<ApplyResult> {
   }
 }
 
-export async function privateDns(host: string | null): Promise<ApplyResult> {
-  if (!host) {
-    await T.sh(TASK, 'settings put global private_dns_mode opportunistic')
-    return { ok: true, summary: 'Private DNS is back to automatic.', warnings: [] }
-  }
-  T.q(host)
-  if (!/^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(host)) throw new Error(`not a DNS host name: ${host}`)
-  if ((T.getStatus().probe?.sdk ?? 0) < 28) throw new Error('Private DNS needs Android 9 or newer.')
-  await T.sh(TASK, `settings put global private_dns_specifier ${host}`)
-  await T.sh(TASK, 'settings put global private_dns_mode hostname')
-  return {
-    ok: true,
-    summary: `Every app's DNS now goes to ${host}.`,
-    warnings: ['If an app stops playing or the TV says "No internet", switch Private DNS off here.']
-  }
-}
+export { activateDns as privateDns } from './filtering-dns'
 
 /** Google TV's Ambient screensaver (Google Photos, art, the weather), and the backdrop app it draws with. */
 export const AMBIENT = ['com.google.android.apps.tv.dreamx', 'com.google.android.backdrop'] as const
@@ -120,11 +105,13 @@ export function adbClosed(host: string): Promise<{ closed: boolean; message: str
     const done = (closed: boolean, message: string): void => { s.destroy(); resolve({ closed, message }) }
     s.setTimeout(3000)
     s.once('connect', () => done(false, `${host}:5555 is still open: network debugging is on. On the TV, switch USB debugging and Network/ADB debugging off, reboot, and check again.`))
-    s.once('timeout', () => done(true, `${host}:5555 did not answer in 3 s: closed, unless the TV is off or at another address.`))
+    s.once('timeout', () => done(false, 'Vérification inconclusive : la TV ne répond pas.'))
     s.once('error', (e: NodeJS.ErrnoException) => {
       if (e.code === 'ECONNREFUSED') done(true, `${host}:5555 is closed: the TV refused the connection.`)
       else done(false, `Could not check ${host}:5555 (${e.code ?? e.message}). Is the TV on and on this network?`)
     })
-    s.connect(5555, host)
+    const target = /^([A-Za-z0-9.-]+)(?::(\d{1,5}))?$/.exec(host)
+    if (!target || (target[2] && (Number(target[2])<1 || Number(target[2])>65535))) { done(false, 'Adresse invalide.'); return }
+    s.connect(Number(target[2]) || 5555, target[1])
   })
 }
