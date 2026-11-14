@@ -35,3 +35,5 @@
 .mz-finish-apps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin:28px 0}.mz-finish-app{overflow:hidden;background:#f8f7f3;border-radius:24px}.mz-finish-app>img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block}.mz-finish-app>div{padding:24px}.mz-finish-app h3{margin:0;font-size:26px}.mz-finish-app button{display:inline-flex;align-items:center;gap:10px;white-space:normal;text-align:left}.mz-finish-app .mz-icon{flex-shrink:0}@media(max-width:1050px){.mz-finish-apps{grid-template-columns:1fr}}
 
 .mz-finish-app{display:flex;flex-direction:column}.mz-finish-app>div{display:flex;flex-direction:column;flex:1;align-items:flex-start}.mz-finish-app button{margin-top:auto}
+
+.mz-device-identity{flex:1;min-width:0}.mz-device-identity strong{display:block}.mz-device-identity small{display:block;color:var(--muted);font-weight:400;margin-top:4px;overflow-wrap:anywhere}

@@ -36,7 +36,19 @@ export function report(s: ConnStatus): ConnStatus {
   return setStatus(s)
 }
 
-export async function connect(host: string): Promise<ConnStatus> {
+let pendingConnection: { host: string; result: Promise<ConnStatus> } | null = null
+
+export function connect(host: string): Promise<ConnStatus> {
+  host = host.trim()
+  if (pendingConnection?.host === host && !connectionAbort.signal.aborted) return pendingConnection.result
+  if (status.state === 'connected' && status.host === host && client && !client.closed) return Promise.resolve(status)
+  const result = connectOnce(host)
+  pendingConnection = { host, result }
+  void result.finally(() => { if (pendingConnection?.result === result) pendingConnection = null })
+  return result
+}
+
+async function connectOnce(host: string): Promise<ConnStatus> {
   host = host.trim()
   disconnect()
   const attempt = connectionAbort
@@ -82,20 +94,7 @@ export async function connect(host: string): Promise<ConnStatus> {
       }
     }
     }
-    while(true) {
-      try { c=await connectTransport(); break }
-      catch(error) {
-        if(attempt.signal.aborted)return status
-        if((error as AdbError).code!=='auth-interrupted'||!authDeadline)throw error
-        if(Date.now()>=authDeadline)throw new AdbError('L’autorisation sur la TV n’a pas été confirmée. Choisissez « Autoriser » sur son écran, puis réessayez.', 'auth')
-        setStatus({state:'waiting-auth',host,transport:viaRelay?'relay':'direct'})
-        await new Promise<void>(resolve=>{
-          const done=():void=>{clearTimeout(timer);attempt.signal.removeEventListener('abort',done);resolve()}
-          const timer=setTimeout(done,1000);attempt.signal.addEventListener('abort',done,{once:true})
-        })
-        if(attempt.signal.aborted)return status
-      }
-    }
+    c = await connectTransport()
     if(attempt.signal.aborted){c.close();return status}
     c.onClose = (err) => {
       if (client === c) {
@@ -128,6 +127,8 @@ function friendly(err: AdbError): string {
       return `Impossible de joindre la TV sur le réseau (${errnoOf(err.message ?? '') || err.code}). Vérifiez son adresse, le débogage et la connexion au même réseau.`
     case 'tls':
       return 'This TV only offers Wireless debugging, which needs a one-time pairing code.'
+    case 'auth-interrupted':
+      return 'La connexion a été interrompue pendant l’autorisation. Aucune nouvelle demande n’a été envoyée. Vérifiez la TV, puis cliquez sur Réessayer.'
     case 'auth':
       return err.message
     default:
@@ -136,6 +137,7 @@ function friendly(err: AdbError): string {
 }
 
 export function disconnect(): void {
+  pendingConnection = null
   connectionAbort.abort()
   connectionAbort = new AbortController()
   relay?.stop(); relay=null

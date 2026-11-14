@@ -155,6 +155,7 @@ export class AdbClient {
     }
     let tried = 0
     let sentPublicKey = false
+    let signedAfterPrompt = false
     while (packet.cmd === A_AUTH && packet.arg0 === AUTH_TOKEN) {
       if (packet.data.length !== TOKEN_SIZE) {
         this.close()
@@ -178,9 +179,15 @@ export class AdbClient {
             throw new AdbError('La TV a interrompu la connexion pendant la demande d’autorisation.', 'auth-interrupted')
           throw e
         }
+      } else if (!signedAfterPrompt) {
+        // Some TVs issue a fresh challenge after Allow instead of sending CNXN.
+        // Sign it on this socket: never resend the public key or reopen the prompt.
+        signedAfterPrompt = true
+        this.send(A_AUTH, AUTH_SIGNATURE, 0, sign(opts.keys[0], packet.data))
+        packet = await this.read(10000)
       } else {
         this.close()
-        throw new AdbError('La TV demande à nouveau l’autorisation de cet ordinateur.', 'auth-interrupted')
+        throw new AdbError('La TV n’a pas accepté la clé après l’autorisation.', 'auth-interrupted')
       }
     }
     if (packet.cmd !== A_CNXN) {

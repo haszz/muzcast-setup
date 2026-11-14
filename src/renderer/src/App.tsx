@@ -72,6 +72,7 @@ export default function App() {
     [host, setHost] = useState(''),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('')
+  const [failedConnection, setFailedConnection] = useState('')
   const [pairing, setPairing] = useState(false),
     [code, setCode] = useState(''),
     [pairPort, setPairPort] = useState(''),
@@ -129,7 +130,11 @@ export default function App() {
       const s = await window.cytv.connect(address.trim())
       setStatus(s)
       if (s.needsPairing) setPairing(true)
-      if (s.state === 'error') throw Error(s.error || 'Connexion impossible.')
+      if (s.state === 'error') {
+        setFailedConnection(address.trim().split(':')[0])
+        throw Error(s.error || 'Connexion impossible.')
+      }
+      setFailedConnection('')
     })
   }
   async function install() {
@@ -296,8 +301,8 @@ export default function App() {
                         else setPairing(true)
                       }}
                     >
-                      <Icon name="tv"/> <strong>{t.name || t.host}</strong>
-                      <span>{t.ready ? 'Connecter →' : t.adbPort ? 'Réessayer la connexion →' : 'Associer →'}</span>
+                      <Icon name="tv"/> <div className="mz-device-identity"><strong>{t.name || 'Téléviseur détecté sur votre réseau'}</strong><small>Adresse sur votre réseau : {t.host}</small></div>
+                      <span>{failedConnection === t.host.split(':')[0] ? 'Réessayer →' : t.ready || t.adbPort ? 'Connecter cette TV →' : 'Associer cette TV →'}</span>
                     </button>
                   ))}
                   {!found.length && (

@@ -27,13 +27,27 @@ it('reports actual authorization expiry in French',async()=>{
  const {tv,options}=await setup();tv.autoAccept=false;
  await expect(AdbClient.connect({...options,authTimeoutMs:80})).rejects.toMatchObject({code:'auth',message:expect.stringContaining('n’a pas été confirmée')})
 })
-it('reconnects after a TV closes while showing authorization without exposing an error',async()=>{
+it('does not reopen authorization after the TV closes the connection',async()=>{
  const {tv,key,options}=await setup();tv.authDisconnects=1;tv.authDelayMs=100;
  const states:ConnStatus[]=[];T.init(key,s=>states.push(s));
- expect(await T.connect(`127.0.0.1:${options.port}`)).toMatchObject({state:'connected'});
- expect(states.some(s=>s.state==='waiting-auth')).toBe(true);expect(states.some(s=>s.state==='error')).toBe(false)
+ expect(await T.connect(`127.0.0.1:${options.port}`)).toMatchObject({state:'error'});
+ expect(tv.authPrompts).toBe(1);
+ expect(states.some(s=>s.state==='waiting-auth')).toBe(true);expect(states.some(s=>s.state==='error')).toBe(true)
 })
 it('cancels the handshake while waiting for authorization',async()=>{
  const {tv,options}=await setup();tv.autoAccept=false;const controller=new AbortController();
  await expect(AdbClient.connect({...options,signal:controller.signal,onAuthPrompt:()=>setTimeout(()=>controller.abort(),20)})).rejects.toMatchObject({code:'auth-interrupted'})
+})
+
+it('signs a fresh challenge after Allow without prompting again',async()=>{
+ const {tv,options}=await setup();tv.challengeAfterAllow=true;
+ const c=await AdbClient.connect(options);
+ expect(c.closed).toBe(false);expect(tv.authPrompts).toBe(1);c.close()
+})
+
+it('shares concurrent requests for the same TV while waiting for Allow',async()=>{
+ const {tv,key,options}=await setup();tv.authDelayMs=150;T.init(key,()=>{});
+ const address=`127.0.0.1:${options.port}`;const first=T.connect(address);
+ expect(T.connect(address)).toBe(first);
+ expect(await first).toMatchObject({state:'connected'});expect(tv.authPrompts).toBe(1)
 })
