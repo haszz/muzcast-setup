@@ -394,12 +394,14 @@ describe('CleanMyTV Home', () => {
   it('refuses to install on Android older than 9 (#30)', async () => {
     const host = String(T.getStatus().host)
     tv.sdk = '24'
+    T.disconnect() // Simulate reconnecting to a TV whose system version changed.
     expect((await T.connect(host)).state).toBe('connected')
     const r = await H.install()
     expect(r.ok).toBe(false)
     expect(r.summary).toMatch(/needs Android 9 or newer, and this TV runs Android 7\.0 \(SDK 24\)/)
     expect((await H.status()).unsupported).toMatch(/Android 9/)
     tv.sdk = undefined
+    T.disconnect()
     expect((await T.connect(host)).state).toBe('connected')
     expect((await H.status()).unsupported).toBeUndefined()
   })

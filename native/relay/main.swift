@@ -8,6 +8,7 @@ guard CommandLine.arguments.count == 2 else { exit(2) }
 let directory = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
 let window = NSWindow(contentRect: NSRect(x:0,y:0,width:480,height:230), styleMask:[.titled,.closable], backing:.buffered, defer:false)
 window.title = "Muzcast · Connexion TV"
+window.isReleasedWhenClosed = false
 let label = NSTextField(wrappingLabelWithString:"Connexion à votre téléviseur…\n\nUne demande macOS peut apparaître si l’accès au réseau local n’a pas encore été autorisé.")
 label.frame = NSRect(x:24,y:72,width:432,height:135)
 let settingsButton = NSButton(title:"Ouvrir les réglages réseau", target:nil, action:nil)
@@ -30,7 +31,10 @@ final class RelayDelegate: NSObject, NSApplicationDelegate {
         guard let url = URL(string:"x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork") else { return }
         NSWorkspace.shared.open(url)
     }
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    // orderOut can invoke this callback too (observed on macOS 27). The TCP
+    // session, not its progress window, owns this process: hiding it must never
+    // terminate Python while the user is authorizing ADB on the TV.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationDidFinishLaunching(_ notification: Notification) { launch?() }
     func applicationWillTerminate(_ notification: Notification) { stop?() }
 }

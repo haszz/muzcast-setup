@@ -1,7 +1,7 @@
 {
   "name": "muzcast-setup",
   "productName": "Muzcast à la maison",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Installer Muzcast TV et Muzcast sur votre téléviseur Android.",
   "license": "MIT",
   "author": "Muzcast — based on CleanMyTV by Vivek",
