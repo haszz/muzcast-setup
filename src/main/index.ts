@@ -1,3 +1,4 @@
+import { revealWindow } from './window-lifecycle'
 import * as telemetry from './telemetry'
 import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -27,6 +28,7 @@ import { bugReport } from './report'
 import type { CheckItem, ConnStatus, CytvApi, KnownTv } from '@shared/api'
 
 let win: BrowserWindow | null = null
+let exiting = false
 
 interface Settings {
   lastHost?: string
@@ -195,7 +197,7 @@ const handlers: Omit<Handlers, 'onLog' | 'onProgress' | 'onStatus'> = {
 }
 
 function send(channel: string, value: unknown): void {
-  if (win && !win.isDestroyed()) win.webContents.send(channel, value)
+  if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) win.webContents.send(channel, value)
 }
 
 // The dev server URL is honoured only in a dev run; an installed app always loads its own files.
@@ -224,7 +226,9 @@ function createWindow(): void {
   win.webContents.on('will-navigate', (e, url) => { if (!isAppUrl(url)) e.preventDefault() })
   win.webContents.on('will-redirect', (e, url) => { if (!isAppUrl(url)) e.preventDefault() })
   win.webContents.on('will-attach-webview', (e) => e.preventDefault())
-  win.once('ready-to-show', () => win?.show())
+  const created = win
+  created.once('closed', () => { if (win === created) win = null })
+  created.once('ready-to-show', () => { if (!exiting && !created.isDestroyed()) created.show() })
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https:\/\//.test(url)) shell.openExternal(url)
     return { action: 'deny' }
@@ -236,10 +240,11 @@ function createWindow(): void {
 // One copy at a time: two would race on the key file and on the same TV connection.
 const primary = app.requestSingleInstanceLock()
 if (!primary) app.quit()
-app.on('open-url', (event,url) => {event.preventDefault();telemetry.receive(url);win?.focus()})
+const revealMainWindow = (): void => revealWindow(win, createWindow, primary && app.isReady(), exiting)
+app.on('open-url', (event,url) => {event.preventDefault();telemetry.receive(url);revealMainWindow()})
 app.on('second-instance', (_event,argv) => {
   for(const arg of argv)if(arg.startsWith('muzcastsetup:'))telemetry.receive(arg)
-  if (win) { if (win.isMinimized()) win.restore(); win.focus() }
+  revealMainWindow()
 })
 
 app.whenReady().then(() => {
@@ -265,7 +270,7 @@ app.whenReady().then(() => {
     })
   }
   createWindow()
-  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
+  app.on('activate', revealMainWindow)
 })
 
 app.on('window-all-closed', () => {
@@ -273,5 +278,4 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-let exiting=false
 app.on("before-quit",event=>{if(exiting)return;event.preventDefault();exiting=true;void telemetry.flush().finally(()=>app.quit())})
