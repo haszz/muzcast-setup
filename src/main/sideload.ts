@@ -79,6 +79,9 @@ export async function install(path: string): Promise<ApplyResult> {
       // Muzcast's launcher (its Home key service, bound at boot) and TV app (its prayer alarms, set again at boot):
       // on TCL, TclAppBoot (APP_AUTO_START) blocks both by default. Saved, or a reboot drops it.
       if (info.package === 'co.muzcast.tv' || info.package === 'com.gathin.tvhome') await T.sh(TASK, `appops set ${info.package} APP_AUTO_START allow 2>/dev/null; appops write-settings 2>/dev/null; echo autostart-granted`)
+      // The Muzcast launcher turns its Home key service back on after each update (TCL drops it on every reinstall)
+      // and picks its own screensaver: both need secure settings, granted here as for CleanMyTV Home.
+      if (info.package === 'com.gathin.tvhome') await T.sh(TASK, `pm grant ${info.package} android.permission.WRITE_SECURE_SETTINGS 2>/dev/null; echo settings-granted`)
       return { ok: true, summary: `Installed ${name}. It's in Home's app list now.`, warnings: [] }
     }
     const code = /\[?(INSTALL_[A-Z_]+)/.exec(out)?.[1] ?? out.trim()
