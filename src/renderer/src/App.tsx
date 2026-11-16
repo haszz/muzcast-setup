@@ -287,10 +287,10 @@ export default function App({ previewStep = 0 }: { previewStep?: number }) {
             {error}
           </div>
         )}
-        {step === 0 && !prepared && !connected && <TvPreparation onReady={() => setPrepared(true)} />}
+        {step === 0 && !prepared && !connected && <TvPreparation onReady={(wireless) => { setPairing(wireless); if(wireless){setCode('');setPairPort('');setPort('')} setPrepared(true) }} />}
         {step === 0 && (prepared || connected) && (
           <div className="mz-connection-layout">
-            <div className="mz-instructions"><h2>Votre TV est prête à être détectée</h2><p>Gardez-la allumée, sur le même réseau que cet ordinateur.</p><div className="mz-note"><b>La prochaine étape se passe sur la TV</b><p>Sélectionnez votre téléviseur ci-contre. S’il demande « Autoriser le débogage USB », choisissez Autoriser avec votre télécommande.</p><p>Sur Mac, une demande d’accès au réseau local peut aussi apparaître.</p></div>{!connected && <button onClick={() => setPrepared(false)}><Icon name="left"/> Revoir la préparation</button>}</div>
+            <div className="mz-instructions"><h2>{pairing?'Associez votre TV par code':'Votre TV est prête à être détectée'}</h2><p>Gardez-la allumée, sur le même réseau que cet ordinateur.</p><div className="mz-note"><b>La prochaine étape se passe sur la TV</b><p>{pairing?'Ouvrez Débogage sans fil sur la TV, puis suivez les instructions du formulaire d’association.':'Sélectionnez votre téléviseur ci-contre. S’il demande « Autoriser le débogage USB », choisissez Autoriser avec votre télécommande.'}</p><p>Sur Mac, une demande d’accès au réseau local peut aussi apparaître.</p></div>{!connected && <button onClick={() => setPrepared(false)}><Icon name="left"/> Revoir la préparation</button>}</div>
             <section className="mz-panel mz-connect-panel">
               <div className="mz-discovery-top"><span className="mz-device-icon"><Icon name={connected?'check':'tv'}/></span><span className="mz-detection"><span className={'mz-dot '+(connected?'online':'')}/>{connected?(status.transport === 'relay' ? 'TV connectée · connexion de secours' : 'TV connectée'):'Détection automatique'}</span></div>
               <h2>
@@ -373,13 +373,12 @@ export default function App({ previewStep = 0 }: { previewStep?: number }) {
                       Ma TV affiche un code d’association
                     </button>
                   </details>
+                  {!pairing && <div className="mz-note"><b>La connexion avec le débogage USB ne fonctionne pas ?</b><p>Vérifiez que la TV est allumée sur le même réseau. Si elle propose « Débogage sans fil », vous pouvez l’associer par code.</p><button disabled={busy || status.state==='connecting' || status.state==='waiting-auth'} onClick={()=>{setCode('');setPairPort('');setPort('');setPairing(true)}}><Icon name="wifi"/> Passer à l’association sans fil</button>{status.state==='waiting-auth'&&<p>Une demande est déjà en cours : acceptez-la sur la TV ou attendez son résultat avant de changer de méthode.</p>}</div>}
                   {pairing && (
                     <div className="mz-pair">
                       <h3>Associer avec le code de la TV</h3>
-                      <p>
-                        Ouvrez Débogage sans fil → Associer un appareil. Le port
-                        d’association et le port de connexion sont différents.
-                      </p>
+                      <ol className="mz-guide-list"><li>Sur la TV, ouvrez <b>Options pour les développeurs → Débogage sans fil</b> et activez-le.</li><li>Ouvrez <b>Associer un appareil avec un code</b>. Relevez le code à 6 chiffres et le <b>port d’association</b>, après les deux-points de l’adresse affichée.</li><li>Le <b>port de connexion</b> figure sur l’écran principal « Débogage sans fil ». Il est différent du port d’association. Ne recopiez pas automatiquement 5555.</li></ol>
+                      <p>Gardez le code actuel ouvert sur la TV pendant l’association. S’il expire, ouvrez-en un nouveau et remplacez le code et le port d’association ci-dessous.</p>
                       <div className="mz-form">
                         {[
                           ['Adresse IP', host, setHost],
